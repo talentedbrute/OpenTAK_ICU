@@ -4,8 +4,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
 import android.os.BatteryManager;
+import android.provider.Settings;
 import android.util.Log;
+import android.view.PixelCopy;
 
 import com.ctc.wstx.stax.WstxInputFactory;
 import com.ctc.wstx.stax.WstxOutputFactory;
@@ -13,8 +16,14 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.dataformat.xml.XmlFactory;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.preference.PreferenceManager;
+
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 import io.opentakserver.opentakicu.contants.Preferences;
 import io.opentakserver.opentakicu.cot.Contact;
@@ -26,25 +35,43 @@ import io.opentakserver.opentakicu.cot.auth;
 import io.opentakserver.opentakicu.cot.Cot;
 import io.opentakserver.opentakicu.cot.event;
 import io.opentakserver.opentakicu.cot.uid;
+import io.opentakserver.opentakicu.utils.CSRGenerator;
+import okhttp3.Authenticator;
+import okhttp3.Credentials;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+import okhttp3.Route;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.net.CacheRequest;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.security.KeyPair;
 import java.security.KeyStore;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManagerFactory;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 
 public class TcpClient extends Thread implements SharedPreferences.OnSharedPreferenceChangeListener {
 
@@ -183,14 +210,15 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
                     sslSocket = (SSLSocket) factory.createSocket(serverAddr, port);
                     sslSocket.setSoTimeout(1000);
                 } else {
-                    Log.d(TAG, "Connecting vi SSL to a server with a signed cert");
-                    SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
-                    sslSocket = (SSLSocket) factory.createSocket(serverAddr, port);
-                    sslSocket.setSoTimeout(1000);
+                    connectToTAKServerKnownCert();
+//                    Log.d(TAG, "Connecting via SSL to a server with a signed cert");
+//                    SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
+//                    sslSocket = (SSLSocket) factory.createSocket(serverAddr, port);
+//                    sslSocket.setSoTimeout(1000);
                 }
-                mBufferOut = new PrintWriter(new BufferedWriter(new OutputStreamWriter(sslSocket.getOutputStream())), true);
-                mBufferIn = new BufferedReader(new InputStreamReader(sslSocket.getInputStream()));
-                context.sendBroadcast(new Intent(TAK_SERVER_CONNECTED).setPackage(context.getPackageName()));
+//                mBufferOut = new PrintWriter(new BufferedWriter(new OutputStreamWriter(sslSocket.getOutputStream())), true);
+//                mBufferIn = new BufferedReader(new InputStreamReader(sslSocket.getInputStream()));
+//                context.sendBroadcast(new Intent(TAK_SERVER_CONNECTED).setPackage(context.getPackageName()));
             } else {
                 Log.d(TAG, "Connecting via TCP");
                 socket = new Socket(serverAddr, port);
@@ -299,4 +327,116 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
         public void messageReceived(String message);
     }
 
+    /**
+     * getCertificate - In order to communicate with a TAK server that is using a well-known certificate
+     * i.e. LetsEncrypt,
+     *
+     * 1. is to obtain the TLS configuration information from the server with a simple HTTP GET
+     * 2. is to generate the CSR using this information to the server
+     * 3. send the CSR to the server
+     */
+
+    private void connectToTAKServerKnownCert() {
+        getCertificateInfo();
+    }
+
+    private void getCertificateInfo() {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        OkHttpClient okHttpClient = new OkHttpClient();
+
+        StringBuilder sb = new StringBuilder("https://");
+        sb.append(serverAddress).append(":8446/Marti/api/tls/config");
+
+        Request request = new Request.Builder()
+                .url(sb.toString())
+                .get()
+                .addHeader("Authorization", Credentials.basic(atak_username, atak_password))
+                .build();
+
+
+        executor.execute(() -> {
+            try {
+                Response response = okHttpClient.newCall(request).execute();
+                if(response.isSuccessful()) {
+                    String xml = response.body().string();
+                    Map<String, String> namedEntries = parseTLSConfig(xml);
+
+                    // Generate the CSR
+                    KeyPair keyPair = CSRGenerator.generateKeyPair();
+                    String csr = CSRGenerator.generateCSR(keyPair, namedEntries);
+                    Log.d(TAG, "CSR: " + csr);
+                    getCertificateFromServer(csr);
+                } else {
+                    Log.e(TAG, "Unable to obtain TLS Configurationg");
+                }
+            } catch(IOException ex) {
+                StringWriter sw = new StringWriter();
+                ex.printStackTrace(new PrintWriter(sw));
+                Log.e(TAG, "IOException - Failed to get TLS configuration: " + ex.getMessage() + " - " + sw);
+            } catch (Exception ex) {
+                StringWriter sw = new StringWriter();
+                ex.printStackTrace(new PrintWriter(sw));
+                Log.e(TAG, "Unknown exception - Failed to get TLS configuration: " + ex.getMessage() + " - " + sw);
+            }
+        });
+    }
+
+    private Map<String, String> parseTLSConfig(final String xml) {
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            Document doc = builder.parse(new ByteArrayInputStream(xml.getBytes()));
+            Element root = doc.getDocumentElement();
+
+            Map<String, String> namedEntries = new HashMap<>();
+
+            NodeList namedEntriesXML = root.getElementsByTagName("nameEntry");
+
+            for(int k=0; k<namedEntriesXML.getLength(); k++) {
+                Element namedEntry = (Element)namedEntriesXML.item(k);
+                namedEntries.put(namedEntry.getAttribute("name"), namedEntry.getAttribute("value"));
+            }
+
+            return namedEntries;
+        } catch(Exception ex) {
+            StringWriter sw = new StringWriter();
+            ex.printStackTrace(new PrintWriter(sw));
+            Log.e(TAG, "Caught unknown exception parsing TLS Config: " + ex.getMessage() + " - " + sw);
+            return null;
+        }
+    }
+
+    private void getCertificateFromServer(final String csr) {
+        try {
+            OkHttpClient okHttpClient = new OkHttpClient();
+
+            PackageInfo packageInfo = context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
+
+            StringBuilder sb = new StringBuilder("https://");
+            sb.append(serverAddress).append(":8446/Marti/api/tls/signClient?clientUid=")
+                    .append(Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID))
+                    .append("&version=")
+                    .append(packageInfo.versionName);
+
+            RequestBody requestBody = RequestBody.create(csr.getBytes());
+
+            Request request = new Request.Builder()
+                    .url(sb.toString())
+                    .post(requestBody)
+                    .addHeader("Authorization", Credentials.basic(atak_username, atak_password))
+                    .build();
+
+            Response response = okHttpClient.newCall(request).execute();
+            if(response.isSuccessful()) {
+                Log.d(TAG, "Successfully obtained client cert");
+            } else {
+                Log.d(TAG, "Unable to obtain client cert");
+            }
+        } catch(Exception ex) {
+            StringWriter sw = new StringWriter();
+            ex.printStackTrace(new PrintWriter(sw));
+            Log.e(TAG, "Caught unknown exception: " + ex.getMessage() + " - " + sw);
+        }
+
+    }
 }

@@ -1066,10 +1066,29 @@ public class CameraService extends Service implements ConnectChecker,
             XmlMapper xmlMapper = XmlMapper.builder(xmlFactory).build();
 
             RequestBody requestBody = RequestBody.create(xmlMapper.writeValueAsString(VideoConnections).getBytes());
+
+            boolean useSSL = false; //preferences.getBoolean(Preferences.ATAK_SERVER_SSL, false);
+
+            String prefix = "http://";
+            int port = 8080;
+
+            if(useSSL) {
+                prefix = "https://";
+                port = 8443;
+            }
+
+            StringBuilder sb = new StringBuilder(prefix);
+            sb.append(atak_address)
+                    .append(":")
+                    .append(port)
+                    .append("/Marti/vcm");
+
+            Log.d(LOGTAG, "Connecting to " + sb);
             Request request = new Request.Builder()
-                    .url("http://" + atak_address + ":8080/Marti/vcm")
+                    .url(sb.toString())
                     .post(requestBody)
                     .build();
+
             executor.execute(() -> {
                 try {
                     Response response = okHttpClient.newCall(request).execute();
