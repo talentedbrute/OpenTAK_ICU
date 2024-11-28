@@ -7,6 +7,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.os.BatteryManager;
 import android.provider.Settings;
+import android.util.Base64;
 import android.util.Log;
 import android.view.PixelCopy;
 
@@ -389,8 +390,9 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
             Element root = doc.getDocumentElement();
 
             Map<String, String> namedEntries = new HashMap<>();
+            String namespaceURI = "http://bbn.com/marti/xml/config";
 
-            NodeList namedEntriesXML = root.getElementsByTagName("nameEntry");
+            NodeList namedEntriesXML = root.getElementsByTagNameNS("nameEntry", namespaceURI);
 
             for(int k=0; k<namedEntriesXML.getLength(); k++) {
                 Element namedEntry = (Element)namedEntriesXML.item(k);
@@ -413,12 +415,12 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
             PackageInfo packageInfo = context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
 
             StringBuilder sb = new StringBuilder("https://");
-            sb.append(serverAddress).append(":8446/Marti/api/tls/signClient?clientUid=")
+            sb.append(serverAddress).append(":8446/Marti/api/tls/signClient/v2?clientUid=")
                     .append(Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID))
                     .append("&version=")
                     .append(packageInfo.versionName);
 
-            RequestBody requestBody = RequestBody.create(csr.getBytes());
+            RequestBody requestBody = RequestBody.create(Base64.encodeToString(csr.getBytes(), Base64.DEFAULT).getBytes());
 
             Request request = new Request.Builder()
                     .url(sb.toString())
