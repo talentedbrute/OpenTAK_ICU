@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.os.BatteryManager;
 import android.provider.Settings;
 import android.util.Base64;
@@ -21,6 +22,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.preference.PreferenceManager;
 
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -37,6 +40,7 @@ import io.opentakserver.opentakicu.cot.Cot;
 import io.opentakserver.opentakicu.cot.event;
 import io.opentakserver.opentakicu.cot.uid;
 import io.opentakserver.opentakicu.utils.CSRGenerator;
+import io.opentakserver.opentakicu.utils.PEMImporter;
 import okhttp3.Authenticator;
 import okhttp3.Credentials;
 import okhttp3.OkHttpClient;
@@ -48,7 +52,11 @@ import okhttp3.Route;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileDescriptor;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -61,7 +69,9 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.security.KeyPair;
 import java.security.KeyStore;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -184,6 +194,7 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
             getSettings();
 
             if (atak_ssl) {
+                SSLSocketFactory factory = null;
                 if (atak_ssl_self_signed) {
                     Log.d(TAG, "Connecting via SSL to a server with a self signed cert");
                     KeyStore trusted = KeyStore.getInstance("PKCS12");
@@ -207,16 +218,22 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
                     SSLContext sslContext = SSLContext.getInstance("TLSv1.3");
                     sslContext.init(kmf.getKeyManagers(),trustManagerFactory.getTrustManagers(),null);
 
-                    SSLSocketFactory factory = sslContext.getSocketFactory();
+                    factory = sslContext.getSocketFactory();
                     sslSocket = (SSLSocket) factory.createSocket(serverAddr, port);
                     sslSocket.setSoTimeout(1000);
                 } else {
-                    connectToTAKServerKnownCert();
-//                    Log.d(TAG, "Connecting via SSL to a server with a signed cert");
-//                    SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
-//                    sslSocket = (SSLSocket) factory.createSocket(serverAddr, port);
-//                    sslSocket.setSoTimeout(1000);
+                    factory = connectToTAKServerKnownCert();
                 }
+
+                // Something went wrong
+                if(factory == null) {
+                    Log.e(TAG, "Factory came back null");
+                    return;
+                }
+
+                sslSocket = (SSLSocket) factory.createSocket(serverAddr, port);
+                sslSocket.setSoTimeout(1000);
+
 //                mBufferOut = new PrintWriter(new BufferedWriter(new OutputStreamWriter(sslSocket.getOutputStream())), true);
 //                mBufferIn = new BufferedReader(new InputStreamReader(sslSocket.getInputStream()));
 //                context.sendBroadcast(new Intent(TAK_SERVER_CONNECTED).setPackage(context.getPackageName()));
@@ -337,12 +354,7 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
      * 3. send the CSR to the server
      */
 
-    private void connectToTAKServerKnownCert() {
-        getCertificateInfo();
-    }
-
-    private void getCertificateInfo() {
-        ExecutorService executor = Executors.newSingleThreadExecutor();
+    private SSLSocketFactory connectToTAKServerKnownCert() throws Exception {
         OkHttpClient okHttpClient = new OkHttpClient();
 
         StringBuilder sb = new StringBuilder("https://");
@@ -355,31 +367,36 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
                 .build();
 
 
-        executor.execute(() -> {
-            try {
-                Response response = okHttpClient.newCall(request).execute();
-                if(response.isSuccessful()) {
-                    String xml = response.body().string();
-                    Map<String, String> namedEntries = parseTLSConfig(xml);
+        try {
+            Response response = okHttpClient.newCall(request).execute();
+            if(response.isSuccessful()) {
+                String xml = response.body().string();
+                Map<String, String> namedEntries = parseTLSConfig(xml);
 
-                    // Generate the CSR
-                    KeyPair keyPair = CSRGenerator.generateKeyPair();
-                    String csr = CSRGenerator.generateCSR(keyPair, namedEntries);
-                    Log.d(TAG, "CSR: " + csr);
-                    getCertificateFromServer(csr);
-                } else {
-                    Log.e(TAG, "Unable to obtain TLS Configurationg");
+                // Generate the CSR
+                KeyPair keyPair = CSRGenerator.generateKeyPair();
+                String csr = CSRGenerator.generateCSR(keyPair, namedEntries);
+                Log.d(TAG, "CSR: " + csr);
+                List<String> certFiles = getCertificateFromServer(csr);
+                if(certFiles == null) {
+                    throw new Exception("Unable to obtain certs from server");
                 }
-            } catch(IOException ex) {
-                StringWriter sw = new StringWriter();
-                ex.printStackTrace(new PrintWriter(sw));
-                Log.e(TAG, "IOException - Failed to get TLS configuration: " + ex.getMessage() + " - " + sw);
-            } catch (Exception ex) {
-                StringWriter sw = new StringWriter();
-                ex.printStackTrace(new PrintWriter(sw));
-                Log.e(TAG, "Unknown exception - Failed to get TLS configuration: " + ex.getMessage() + " - " + sw);
+                return PEMImporter.createSSLFactory(new File(certFiles.get(0)), new File(certFiles.get(1)), "atakatak");
+            } else {
+                Log.e(TAG, "Unable to obtain TLS Configurationg");
+                return null;
             }
-        });
+        } catch(IOException ex) {
+            StringWriter sw = new StringWriter();
+            ex.printStackTrace(new PrintWriter(sw));
+            Log.e(TAG, "IOException - Failed to get TLS configuration: " + ex.getMessage() + " - " + sw);
+            throw ex;
+        } catch (Exception ex) {
+            StringWriter sw = new StringWriter();
+            ex.printStackTrace(new PrintWriter(sw));
+            Log.e(TAG, "Unknown exception - Failed to get TLS configuration: " + ex.getMessage() + " - " + sw);
+            throw ex;
+        }
     }
 
     private Map<String, String> parseTLSConfig(final String xml) {
@@ -387,15 +404,16 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             DocumentBuilder builder = factory.newDocumentBuilder();
             Document doc = builder.parse(new ByteArrayInputStream(xml.getBytes()));
-            Element root = doc.getDocumentElement();
+            doc.getDocumentElement().normalize();
 
             Map<String, String> namedEntries = new HashMap<>();
+            namedEntries.put("CN", atak_username);
             String namespaceURI = "http://bbn.com/marti/xml/config";
 
-            NodeList namedEntriesXML = root.getElementsByTagNameNS("nameEntry", namespaceURI);
+            NodeList namedEntriesXML = doc.getElementsByTagName("nameEntry");
 
             for(int k=0; k<namedEntriesXML.getLength(); k++) {
-                Element namedEntry = (Element)namedEntriesXML.item(k);
+                Element namedEntry = (Element) namedEntriesXML.item(k);
                 namedEntries.put(namedEntry.getAttribute("name"), namedEntry.getAttribute("value"));
             }
 
@@ -408,7 +426,7 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
         }
     }
 
-    private void getCertificateFromServer(final String csr) {
+    private List<String>  getCertificateFromServer(final String csr) throws IOException, JSONException, PackageManager.NameNotFoundException {
         try {
             OkHttpClient okHttpClient = new OkHttpClient();
 
@@ -420,25 +438,69 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
                     .append("&version=")
                     .append(packageInfo.versionName);
 
-            RequestBody requestBody = RequestBody.create(Base64.encodeToString(csr.getBytes(), Base64.DEFAULT).getBytes());
+            Log.d(TAG, "Submitting CSR to: " + sb);
+            RequestBody requestBody = RequestBody.create(csr.getBytes());
 
             Request request = new Request.Builder()
                     .url(sb.toString())
                     .post(requestBody)
                     .addHeader("Authorization", Credentials.basic(atak_username, atak_password))
+                    .addHeader("Content-Type", "text/plain")
                     .build();
 
             Response response = okHttpClient.newCall(request).execute();
             if(response.isSuccessful()) {
                 Log.d(TAG, "Successfully obtained client cert");
+                JSONObject jsonObject = new JSONObject(response.body().string());
+
+                String signedCert = jsonObject.get("signedCert").toString();
+                String ca0 = jsonObject.get("ca0").toString();
+                String ca1 = jsonObject.get("ca1").toString();
+
+                List<String> certFiles = new ArrayList<>();
+                certFiles.add(writeFileOnInternalStorage("client.pem", signedCert));
+                certFiles.add(writeFileOnInternalStorage("server.pem", ca0 + ca1));
+                return certFiles;
             } else {
                 Log.d(TAG, "Unable to obtain client cert");
+                return null;
             }
-        } catch(Exception ex) {
+        } catch(IOException ex) {
             StringWriter sw = new StringWriter();
             ex.printStackTrace(new PrintWriter(sw));
-            Log.e(TAG, "Caught unknown exception: " + ex.getMessage() + " - " + sw);
+            Log.e(TAG, "Caught IOException: " + ex.getMessage() + " - " + sw);
+            throw ex;
+        } catch(JSONException ex) {
+            StringWriter sw = new StringWriter();
+            ex.printStackTrace(new PrintWriter(sw));
+            Log.e(TAG, "Caught JSONException: " + ex.getMessage() + " - " + sw);
+            throw ex;
+        } catch (PackageManager.NameNotFoundException ex) {
+            StringWriter sw = new StringWriter();
+            ex.printStackTrace(new PrintWriter(sw));
+            Log.e(TAG, "Caught NameNotFoundException: " + ex.getMessage() + " - " + sw);
+            throw ex;
+        }
+    }
+
+    private String writeFileOnInternalStorage(String filename, String data) throws IOException{
+        File dir = new File(context.getFilesDir(), "certs");
+        if(!dir.exists()) {
+            dir.mkdir();
         }
 
+        try {
+            File outputFile = new File(dir, filename);
+            FileWriter writer = new FileWriter(outputFile);
+            writer.append(data);
+            writer.flush();
+            writer.close();
+            return outputFile.getAbsolutePath();
+        } catch(IOException ex) {
+            StringWriter sw = new StringWriter();
+            ex.printStackTrace(new PrintWriter(sw));
+            Log.e(TAG, "Caught IOException: " + ex.getMessage() + " - " + sw);
+            throw ex;
+        }
     }
 }
