@@ -46,6 +46,20 @@ public class Preferences {
     public static final String VIDEO_CODEC_DEFAULT = VideoCodec.H264.name();
     public static final String RECORD_VIDEO = "record";
     public static final boolean RECORD_VIDEO_DEFAULT = false;
+    public static final String USB_WIDTH = "usb_width";
+    public static final String USB_WIDTH_DEFAULT = "1920";
+    public static final String USB_HEIGHT = "usb_height";
+    public static final String USB_HEIGHT_DEFAULT = "1080";
+    public static final String VIDEO_SOURCE = "video_source";
+    public static final String VIDEO_SOURCE_DEFAULT = "camera2";
+    public static final String VIDEO_SOURCE_USB = "usb";
+    public static final String VIDEO_SOURCE_SCREEN = "screen";
+    public static final String TEXT_OVERLAY = "text_overlay";
+    public static final boolean TEXT_OVERLAY_DEFAULT = false;
+    public static final String TEXT_OVERLAY_TIMEZONE = "text_overlay_timezone";
+    public static final boolean TEXT_OVERLAY_TIMEZONE_DEFAULT = true;
+    public static final String CHROMA_KEY_BACKGROUND = "chroma_bg";
+    public static final String CHROMA_KEY_BACKGROUND_DEFAULT = null;
 
     /* Audio Preferences */
     public static final String ENABLE_AUDIO = "enable_audio";
@@ -66,6 +80,8 @@ public class Preferences {
     /* ATAK Preferences */
     public static final String ATAK_SEND_COT = "send_cot";
     public static final boolean ATAK_SEND_COT_DEFAULT = false;
+    public static final String ATAK_SEND_STREAM_DETAILS = "send_stream_details";
+    public static final boolean ATAK_SEND_STREAM_DETAILS_DEFAULT = false;
     public static final String ATAK_SERVER_ADDRESS = "atak_address";
     public static final String ATAK_SERVER_ADDRESS_DEFAULT = "192.168.1.10";
     public static final String ATAK_SERVER_PORT = "atak_port";

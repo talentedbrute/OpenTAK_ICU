@@ -35,26 +35,38 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.OpenTAKICU"
+        android:theme="@style/OpenTAKICU"
         android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_configuration"
         tools:targetApi="31">
 
         <service
             android:foregroundServiceType="microphone|camera"
-            android:name=".CameraService" />
+            android:name=".Camera2Service" />
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"
             android:screenOrientation="fullSensor"
-            android:theme="@style/Theme.OpenTAKICU">
+            android:theme="@style/OpenTAKICU">
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_DETACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/device_filter" />
+
         </activity>
         <activity android:name=".OnBoardingActivity" />
         <activity android:name=".SettingsActivity" />
