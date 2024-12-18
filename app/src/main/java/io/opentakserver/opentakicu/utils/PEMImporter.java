@@ -1,5 +1,7 @@
 package io.opentakserver.opentakicu.utils;
 
+import android.util.Log;
+
 import org.bouncycastle.openssl.PEMParser;
 import org.bouncycastle.util.io.pem.PemObject;
 import org.bouncycastle.util.io.pem.PemReader;
@@ -9,6 +11,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.security.KeyFactory;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
@@ -35,8 +39,9 @@ import io.opentakserver.opentakicu.TcpClient;
 
 public class PEMImporter {
     public static final String TAG = TcpClient.class.getSimpleName();
-    public static SSLSocketFactory createSSLFactory(File clientPEM, File serverPem, String keystorePassword) throws
+    public static SSLSocketFactory createSSLFactory(File clientPEM, File serverPem, final String keystorePassword) throws
             IOException, NoSuchAlgorithmException, UnrecoverableKeyException, KeyStoreException, KeyManagementException, CertificateException, InvalidKeySpecException {
+
         // Create an SSLContext for TLS client
         SSLContext sslContext = SSLContext.getInstance("TLS");
 
@@ -45,31 +50,32 @@ public class PEMImporter {
         TrustManager[] trustManagers = null;
 
         // Load client certificate and private key (if applicable)
-        if (clientPEM != null ) {
+        if (clientPEM != null) {
             // Password for the keystore and the alias
             // Load the PEM certificate
             List<X509Certificate> certs = new ArrayList<>();
+
             // Create a keystore
-            KeyStore keystore = KeyStore.getInstance("JKS");
+            KeyStore keystore = KeyStore.getInstance("AndroidKeyStore");
             keystore.load(null, null);
 
             FileInputStream pemFileInputStream = new FileInputStream(clientPEM);
             PEMParser pemParser = new PEMParser(new PemReader(new InputStreamReader(pemFileInputStream)));
             Object pemObject;
             int i = 0;
-            while((pemObject = pemParser.readPemObject()) != null) {
-                if(pemObject instanceof PemObject) {
-                    PemObject pem = (PemObject)pemObject;
-                    if("CERTIFICATE".equals(pem.getType())) {
+            while ((pemObject = pemParser.readPemObject()) != null) {
+                if (pemObject instanceof PemObject) {
+                    PemObject pem = (PemObject) pemObject;
+                    if ("CERTIFICATE".equals(pem.getType())) {
                         CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
                         X509Certificate cert = (X509Certificate) certFactory.generateCertificate(new ByteArrayInputStream(pem.getContent()));
                         certs.add(cert);
                         keystore.setCertificateEntry("client_certificate_" + (i++), cert);
-                    } else if("PRIVATE KEY".equals(pem.getType())) {
+                    } else if ("PRIVATE KEY".equals(pem.getType())) {
                         KeyFactory keyFactory = KeyFactory.getInstance("RSA");
                         PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(((PemObject) pemObject).getContent());
                         PrivateKey privateKey = keyFactory.generatePrivate(keySpec);
-                        keystore.setKeyEntry("client_private_key", privateKey, keystorePassword.toCharArray(), certs.toArray(new X509Certificate[0]));
+                        keystore.setKeyEntry("client_private_key", privateKey, null, certs.toArray(new X509Certificate[0]));
                     }
                 }
             }
@@ -84,7 +90,7 @@ public class PEMImporter {
         }
 
         // Load the server PEM file as a truststore
-        if(serverPem != null) {
+        if (serverPem != null) {
             KeyStore trustStore = KeyStore.getInstance("PKCS12");
             trustStore.load(null, null);
 
@@ -110,5 +116,6 @@ public class PEMImporter {
         // Now you can use sslContext to create SSL sockets or configure an HttpClient, for example.
         SSLSocketFactory sslSocketFactory = sslContext.getSocketFactory();
         return sslSocketFactory;
+
     }
 }

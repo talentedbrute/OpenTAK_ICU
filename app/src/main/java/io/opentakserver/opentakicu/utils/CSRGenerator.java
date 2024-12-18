@@ -26,19 +26,9 @@ public class CSRGenerator {
     // Generate KeyPair
     public static KeyPair generateKeyPair() throws Exception {
         Log.d(TAG, "Setup for key pair generation");
-        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(
-                KeyProperties.KEY_ALGORITHM_RSA, "AndroidKeyStore");
-
-        keyPairGenerator.initialize(
-                new KeyGenParameterSpec.Builder(
-                        "OpenTAK_ICU",
-                        KeyProperties.PURPOSE_SIGN | KeyProperties.PURPOSE_VERIFY) // Signing & verifying
-                        .setKeySize(2048) // RSA key size
-                        .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA512) // Supported digests
-                        .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
-                        .build());
-
-        return keyPairGenerator.generateKeyPair();
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+        keyPairGenerator.initialize(2048);
+        return  keyPairGenerator.generateKeyPair();
     }
 
     // Generate CSR

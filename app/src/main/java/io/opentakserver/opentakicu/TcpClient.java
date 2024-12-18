@@ -8,9 +8,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.os.BatteryManager;
 import android.provider.Settings;
-import android.util.Base64;
 import android.util.Log;
-import android.view.PixelCopy;
 
 import com.ctc.wstx.stax.WstxInputFactory;
 import com.ctc.wstx.stax.WstxOutputFactory;
@@ -18,7 +16,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.dataformat.xml.XmlFactory;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.preference.PreferenceManager;
 
@@ -26,7 +23,6 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
-import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 import io.opentakserver.opentakicu.contants.Preferences;
@@ -41,44 +37,40 @@ import io.opentakserver.opentakicu.cot.event;
 import io.opentakserver.opentakicu.cot.uid;
 import io.opentakserver.opentakicu.utils.CSRGenerator;
 import io.opentakserver.opentakicu.utils.PEMImporter;
-import okhttp3.Authenticator;
 import okhttp3.Credentials;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
-import okhttp3.Route;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileDescriptor;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.net.CacheRequest;
-import java.net.InetAddress;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.nio.charset.Charset;
 import java.security.KeyPair;
 import java.security.KeyStore;
+import java.security.PrivateKey;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManagerFactory;
 import javax.xml.parsers.DocumentBuilder;
@@ -107,14 +99,13 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
     private String path;
 
     private Socket socket;
-    private SSLSocket sslSocket;
     private Context context;
     private Intent batteryStatus;
 
     private String mServerMessage;
     private OnMessageReceived mMessageListener;
     public boolean mRun = false;
-    private PrintWriter mBufferOut;
+    private OutputStream mBufferOut;
     private BufferedReader mBufferIn;
 
     /**
@@ -140,16 +131,18 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
      */
     public void sendMessage(final String message) {
         try {
-            Runnable runnable = () -> {
-                if (mBufferOut != null) {
-                    mBufferOut.println(message);
-                    mBufferOut.flush();
-                }
-            };
-            Thread thread = new Thread(runnable);
-            thread.start();
-        } catch (Exception e) {
-            Log.e(TAG ,"Error sending message", e);
+            if (mBufferOut != null) {
+                mBufferOut.write(message.getBytes(Charset.defaultCharset()));
+                mBufferOut.flush();
+            }
+        } catch(SocketException ex) {
+            StringWriter sw = new StringWriter();
+            ex.printStackTrace(new PrintWriter(sw));
+            Log.e(TAG, "SocketException " + ex.getMessage() + ": " + sw);
+        } catch (IOException ex) {
+            StringWriter sw = new StringWriter();
+            ex.printStackTrace(new PrintWriter(sw));
+            Log.e(TAG, "IOException " + ex.getMessage() + ": " + sw);
         }
     }
 
@@ -160,12 +153,14 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
         mRun = false;
 
         if (mBufferOut != null) {
-            mBufferOut.flush();
+            try {
+                mBufferOut.flush();
+            } catch(IOException ex) {
+                //DO nothing
+            }
 
             try {
                 mBufferOut.close();
-                if (sslSocket != null)
-                    sslSocket.close();
                 if (socket != null)
                     socket.close();
             } catch (IOException e) {
@@ -179,7 +174,6 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
         mBufferOut = null;
         mServerMessage = null;
         socket = null;
-        sslSocket = null;
         Log.d(TAG, "Sending Broadcast " + TAK_SERVER_DISCONNECTED);
         context.sendBroadcast(new Intent(TAK_SERVER_DISCONNECTED).setPackage(context.getPackageName()));
     }
@@ -188,8 +182,6 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
         mRun = true;
 
         try {
-            InetAddress serverAddr = InetAddress.getByName(serverAddress);
-
             Log.d(TAG, "Connecting...");
             getSettings();
 
@@ -212,38 +204,31 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
                     TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
                     trustManagerFactory.init(trusted);
 
-
                     KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
                     kmf.init(client_cert_keystore, atak_trust_store_password.toCharArray());
                     SSLContext sslContext = SSLContext.getInstance("TLSv1.3");
                     sslContext.init(kmf.getKeyManagers(),trustManagerFactory.getTrustManagers(),null);
 
                     factory = sslContext.getSocketFactory();
-                    sslSocket = (SSLSocket) factory.createSocket(serverAddr, port);
-                    sslSocket.setSoTimeout(1000);
+                    socket = factory.createSocket(serverAddress, port);
+                    socket.setSoTimeout(1000);
                 } else {
-                    factory = connectToTAKServerKnownCert();
+                    factory = certificateEnrollment();
                 }
 
-                // Something went wrong
                 if(factory == null) {
-                    Log.e(TAG, "Factory came back null");
-                    return;
+                    Log.e(TAG, "SSL Socket Factory is NULL");
+                    throw new Exception("SSL Socket Factory is NULL");
                 }
 
-                sslSocket = (SSLSocket) factory.createSocket(serverAddr, port);
-                sslSocket.setSoTimeout(1000);
+                Log.d(TAG, "Connecting to " + serverAddress + ":" + port);
+                socket = factory.createSocket(serverAddress, port);
+                socket.setSoTimeout(1000);
 
-//                mBufferOut = new PrintWriter(new BufferedWriter(new OutputStreamWriter(sslSocket.getOutputStream())), true);
-//                mBufferIn = new BufferedReader(new InputStreamReader(sslSocket.getInputStream()));
-//                context.sendBroadcast(new Intent(TAK_SERVER_CONNECTED).setPackage(context.getPackageName()));
             } else {
                 Log.d(TAG, "Connecting via TCP");
-                socket = new Socket(serverAddr, port);
+                socket = new Socket(serverAddress, port);
                 socket.setSoTimeout(1000);
-                mBufferOut = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())), true);
-                mBufferIn = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                context.sendBroadcast(new Intent(TAK_SERVER_CONNECTED).setPackage(context.getPackageName()));
                 Log.d(TAG, "Connected via TCP");
             }
 
@@ -251,6 +236,10 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
             Log.d(TAG, "Sleeping");
             Thread.sleep(1000);
             Log.d(TAG, "awake");
+
+            mBufferOut = socket.getOutputStream();
+            mBufferIn = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            context.sendBroadcast(new Intent(TAK_SERVER_CONNECTED).setPackage(context.getPackageName()));
 
             XmlFactory xmlFactory = XmlFactory.builder()
                     .xmlInputFactory(new WstxInputFactory())
@@ -354,7 +343,7 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
      * 3. send the CSR to the server
      */
 
-    private SSLSocketFactory connectToTAKServerKnownCert() throws Exception {
+    private SSLSocketFactory certificateEnrollment() throws Exception {
         OkHttpClient okHttpClient = new OkHttpClient();
 
         StringBuilder sb = new StringBuilder("https://");
@@ -377,7 +366,7 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
                 KeyPair keyPair = CSRGenerator.generateKeyPair();
                 String csr = CSRGenerator.generateCSR(keyPair, namedEntries);
                 Log.d(TAG, "CSR: " + csr);
-                List<String> certFiles = getCertificateFromServer(csr);
+                List<String> certFiles = getCertificateFromServer(csr, keyPair.getPrivate());
                 if(certFiles == null) {
                     throw new Exception("Unable to obtain certs from server");
                 }
@@ -426,7 +415,7 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
         }
     }
 
-    private List<String>  getCertificateFromServer(final String csr) throws IOException, JSONException, PackageManager.NameNotFoundException {
+    private List<String>  getCertificateFromServer(final String csr, final PrivateKey privateKey) throws IOException, JSONException, PackageManager.NameNotFoundException {
         try {
             OkHttpClient okHttpClient = new OkHttpClient();
 
@@ -458,8 +447,8 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
                 String ca1 = jsonObject.get("ca1").toString();
 
                 List<String> certFiles = new ArrayList<>();
-                certFiles.add(writeFileOnInternalStorage("client.pem", signedCert));
-                certFiles.add(writeFileOnInternalStorage("server.pem", ca0 + ca1));
+                certFiles.add(writeCertToInternalStorage("client.pem", wrapCert(signedCert) + privateKeyToPEM(privateKey)));
+                certFiles.add(writeCertToInternalStorage("server.pem", wrapCert(ca0) + wrapCert(ca1)));
                 return certFiles;
             } else {
                 Log.d(TAG, "Unable to obtain client cert");
@@ -483,7 +472,7 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
         }
     }
 
-    private String writeFileOnInternalStorage(String filename, String data) throws IOException{
+    private String writeCertToInternalStorage(String filename, String data) throws IOException{
         File dir = new File(context.getFilesDir(), "certs");
         if(!dir.exists()) {
             dir.mkdir();
@@ -493,6 +482,7 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
             File outputFile = new File(dir, filename);
             FileWriter writer = new FileWriter(outputFile);
             writer.append(data);
+            Log.d(TAG, "Writing Cert To File: " + data);
             writer.flush();
             writer.close();
             return outputFile.getAbsolutePath();
@@ -502,5 +492,36 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
             Log.e(TAG, "Caught IOException: " + ex.getMessage() + " - " + sw);
             throw ex;
         }
+    }
+
+    private String wrapCert(final String cert) {
+        StringBuilder sb = new StringBuilder("-----BEGIN CERTIFICATE-----\n");
+        sb.append(cert).append("\n-----END CERTIFICATE-----\n");
+        return sb.toString();
+    }
+
+    private String privateKeyToPEM(PrivateKey privateKey) {
+        // 1. Get the private key's encoded form
+        byte[] keyBytes = privateKey.getEncoded();
+
+        // 2. Convert to Base64 for PEM format
+        String base64Key = Base64.getEncoder().encodeToString(keyBytes);
+
+        // 3. Add PEM format headers and footers
+        StringBuilder pemKey = new StringBuilder("-----BEGIN PRIVATE KEY-----\n");
+        pemKey.append(formatInChunks(base64Key, 64))
+                .append("\n-----END PRIVATE KEY-----");
+
+        return pemKey.toString();
+    }
+    private String formatInChunks(String base64Key, int chunkSize) {
+        StringBuilder formattedKey = new StringBuilder();
+        int index = 0;
+        while (index < base64Key.length()) {
+            formattedKey.append(base64Key, index, Math.min(index + chunkSize, base64Key.length()));
+            formattedKey.append("\n");
+            index += chunkSize;
+        }
+        return formattedKey.toString().trim();
     }
 }
