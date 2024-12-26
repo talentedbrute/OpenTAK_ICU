@@ -367,7 +367,7 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
         event takPing = new event();
         takPing.setType(Constants.CT_CONN_REQUEST);
         takPing.setUid("takPing");
-
+        takPing.setPoint(new Point(0.0, 0.0,0.0));
         return xmlMapper.writeValueAsString(takPing);
     }
     /**

@@ -1263,9 +1263,10 @@ public class Camera2Service extends Service implements ConnectChecker,
                 xmlMapper.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
                 String cot = xmlMapper.writeValueAsString(event);
 
-                if (!protocol.equals("udp") && tcpClient != null)
+                if (!protocol.equals("udp") && tcpClient != null) {
+                    Log.d(TAG, "Sending CoT message: " + event.getType());
                     tcpClient.sendMessage(cot);
-                else if (protocol.equals("udp") && multicastClient != null)
+                } else if (protocol.equals("udp") && multicastClient != null)
                     multicastClient.send_cot(cot);
 
             } catch (Exception ex) {
