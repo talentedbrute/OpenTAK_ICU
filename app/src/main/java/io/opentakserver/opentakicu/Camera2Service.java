@@ -24,6 +24,7 @@ import io.opentakserver.opentakicu.cot.event;
 import io.opentakserver.opentakicu.cot.Point;
 import io.opentakserver.opentakicu.cot.Sensor;
 import io.opentakserver.opentakicu.cot.__Video;
+import io.opentakserver.opentakicu.utils.Constants;
 import io.opentakserver.opentakicu.utils.PathUtils;
 import kotlin.NotImplementedError;
 import okhttp3.OkHttpClient;
@@ -105,6 +106,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.text.SimpleDateFormat;
@@ -113,6 +116,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -122,6 +126,8 @@ import javax.net.ssl.TrustManagerFactory;
 
 public class Camera2Service extends Service implements ConnectChecker,
         SharedPreferences.OnSharedPreferenceChangeListener, SensorEventListener {
+    private static final String TAG = Constants.TAG_PREFIX + Camera2Service.class.getSimpleName();
+
     static final String START_STREAM = "start_stream";
     static final String STOP_STREAM = "stop_stream";
     static final String EXIT_APP = "exit_app";
@@ -132,7 +138,6 @@ public class Camera2Service extends Service implements ConnectChecker,
     static final String LOCATION_CHANGE = "location_change";
 
     private NotificationManager notificationManager;
-    private static final String LOGTAG = "CameraService";
     private final String channelId = "CameraServiceChannel";
     private final int notifyId = 3425;
     private SharedPreferences preferences;
@@ -240,7 +245,7 @@ public class Camera2Service extends Service implements ConnectChecker,
     @Override
     public void onCreate() {
         super.onCreate();
-        Log.d(LOGTAG, "onCreate");
+        Log.d(TAG, "onCreate");
 
         preferences = PreferenceManager.getDefaultSharedPreferences(this);
         preferences.registerOnSharedPreferenceChangeListener(this);
@@ -249,7 +254,7 @@ public class Camera2Service extends Service implements ConnectChecker,
         folder = PathUtils.getRecordPath();
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(channelId, LOGTAG, NotificationManager.IMPORTANCE_HIGH);
+            NotificationChannel channel = new NotificationChannel(channelId, TAG, NotificationManager.IMPORTANCE_HIGH);
             notificationManager.createNotificationChannel(channel);
         }
 
@@ -301,48 +306,48 @@ public class Camera2Service extends Service implements ConnectChecker,
             if (Objects.equals(Build.MODEL, "Armor 26 Ultra"))
                 cameraIds.add("2");
             else
-                Log.d(LOGTAG, "Device model is " + Build.MODEL);
+                Log.d(TAG, "Device model is " + Build.MODEL);
 
             redLightCameraId = FeatureSwitcher.getRedLightCamId();
             if (redLightCameraId != -1) {
                 hasRedLightCamera = true;
                 cameraIds.add(redLightCameraId + "");
-                Log.d(LOGTAG, "This device has a red light camera (" + redLightCameraId + "), checking for root...");
+                Log.d(TAG, "This device has a red light camera (" + redLightCameraId + "), checking for root...");
                 isRooted = Shell.getShell().isRoot();
-                Log.d(LOGTAG, "Device rooted: " + isRooted);
+                Log.d(TAG, "Device rooted: " + isRooted);
             }
 
             int wideAngleCamId = FeatureSwitcher.getWideAngleCamId();
             if (wideAngleCamId != -1) {
-                Log.d(LOGTAG, "This device has a wide angle camera with ID " + wideAngleCamId);
+                Log.d(TAG, "This device has a wide angle camera with ID " + wideAngleCamId);
                 cameraIds.add(wideAngleCamId + "");
             }
 
-            Log.d(LOGTAG, "Got cameraIds " + cameraIds);
+            Log.d(TAG, "Got cameraIds " + cameraIds);
         }
     }
 
     public float getZoom() {
-        Log.d(LOGTAG, "GetZoom " + (getStream().getVideoSource() instanceof Camera2Source));
+        Log.d(TAG, "GetZoom " + (getStream().getVideoSource() instanceof Camera2Source));
         if (getStream().getVideoSource() instanceof Camera2Source) {
             Camera2Source camera2Source = (Camera2Source) getStream().getVideoSource();
-            Log.d(LOGTAG, "Zoom is " + camera2Source.getZoom());
+            Log.d(TAG, "Zoom is " + camera2Source.getZoom());
             if (camera2Source.getZoom() < camera2Source.getZoomRange().getLower() || camera2Source.getZoom() > camera2Source.getZoomRange().getUpper())
                 return camera2Source.getZoomRange().getLower();
 
             return camera2Source.getZoom();
         }
-        Log.d(LOGTAG, "Zoom is 0");
+        Log.d(TAG, "Zoom is 0");
         return 0f;
     }
 
     public VideoSource getVideoSource() {
         if (videoSource.equals(Preferences.VIDEO_SOURCE_USB)) {
-            Log.d(LOGTAG, "returning new usb cam");
+            Log.d(TAG, "returning new usb cam");
             return new CameraUvcSource();
         }
         else {
-            Log.d(LOGTAG, "returning new cam2");
+            Log.d(TAG, "returning new cam2");
             return new Camera2Source(getApplicationContext());
         }
 
@@ -420,27 +425,27 @@ public class Camera2Service extends Service implements ConnectChecker,
     public void startPreview(OpenGlView openGlView) {
         this.openGlView = openGlView;
         if (!getStream().isOnPreview()) {
-            Log.d(LOGTAG, "Starting Preview");
+            Log.d(TAG, "Starting Preview");
             getStream().startPreview(openGlView, true);
         } else {
-            Log.e(LOGTAG, "not starting preview");
+            Log.e(TAG, "not starting preview");
         }
     }
 
     public void stopPreview() {
         if (getStream().isOnPreview()) {
-            Log.d(LOGTAG, "Stopping Preview");
+            Log.d(TAG, "Stopping Preview");
             getStream().stopPreview();
         }
     }
 
     public void setView(OpenGlView openGlView) {
-        Log.d(LOGTAG, "setView openGlView");
+        Log.d(TAG, "setView openGlView");
         //getCamera().replaceView(openGlView);
     }
 
     public void setView(Context context) {
-        Log.d(LOGTAG, "setView context");
+        Log.d(TAG, "setView context");
         //getCamera().replaceView(context);
     }
 
@@ -456,7 +461,7 @@ public class Camera2Service extends Service implements ConnectChecker,
                 try {
                     camera2Source.enableLantern();
                 } catch (Exception e) {
-                    Log.d(LOGTAG, "Failed to enable lantern: " + e.getLocalizedMessage());
+                    Log.d(TAG, "Failed to enable lantern: " + e.getLocalizedMessage());
                     e.printStackTrace();
                 }
             }
@@ -505,7 +510,7 @@ public class Camera2Service extends Service implements ConnectChecker,
 
     public void switchCamera() {
         if (videoSource.equals(Preferences.VIDEO_SOURCE_DEFAULT)) {
-            Log.d(LOGTAG, "Camera Changed");
+            Log.d(TAG, "Camera Changed");
             Camera2Source camera2Source = (Camera2Source) getStream().getVideoSource();
 
             if (cameraIds.isEmpty())
@@ -521,7 +526,7 @@ public class Camera2Service extends Service implements ConnectChecker,
             if (currentCameraId > cameraIds.size() - 1) {
                 currentCameraId = 0;
             }
-            Log.d(LOGTAG, "Switching to camera " + cameraIds.get(currentCameraId));
+            Log.d(TAG, "Switching to camera " + cameraIds.get(currentCameraId));
             camera2Source.openCameraId(cameraIds.get(currentCameraId));
 
             // Turn on the IR LEDs if we're switching to the IR Camera
@@ -538,10 +543,10 @@ public class Camera2Service extends Service implements ConnectChecker,
                 float h = size.getHeight();
                 horizonalFov = (2*Math.atan(w/(maxFocus[0]*2))) * 180/Math.PI;
                 verticalFov = (2*Math.atan(h/(maxFocus[0]*2))) * 180/Math.PI;
-                Log.d(LOGTAG, "horizontalFov = " + horizonalFov);
-                Log.d(LOGTAG, "verticalFov = " + verticalFov);
+                Log.d(TAG, "horizontalFov = " + horizonalFov);
+                Log.d(TAG, "verticalFov = " + verticalFov);
             } catch (CameraAccessException e) {
-                Log.e(LOGTAG, "Failed to get camera characteristics", e);
+                Log.e(TAG, "Failed to get camera characteristics", e);
             }
         }
     }
@@ -639,25 +644,25 @@ public class Camera2Service extends Service implements ConnectChecker,
 
     @Override
     public IBinder onBind(Intent intent) {
-        Log.d(LOGTAG, "onBind");
+        Log.d(TAG, "onBind");
         return binder;
     }
 
 
     @Override
     public void onAuthError() {
-        Log.d(LOGTAG, "Auth error");
+        Log.d(TAG, "Auth error");
         stopStream(getString(R.string.auth_error), AUTH_ERROR);
     }
 
     @Override
     public void onAuthSuccess() {
-        Log.d(LOGTAG, "Auth success");
+        Log.d(TAG, "Auth success");
     }
 
     @Override
     public void onConnectionFailed(@NonNull String reason) {
-        Log.e(LOGTAG, "Connection failed: ".concat(reason));
+        Log.e(TAG, "Connection failed: ".concat(reason));
         stopStream(getString(R.string.connection_failed) + ": " + reason, CONNECTION_FAILED);
     }
 
@@ -669,13 +674,13 @@ public class Camera2Service extends Service implements ConnectChecker,
     @Override
     public void onConnectionSuccess() {
         if (adaptive_bitrate) {
-            Log.d(LOGTAG, "Setting adaptive bitrate");
+            Log.d(TAG, "Setting adaptive bitrate");
             bitrateAdapter = new BitrateAdapter(bitrate -> {
                 getStream().setVideoBitrateOnFly(bitrate);
             });
             bitrateAdapter.setMaxBitrate(bitrate * 1024);
         } else {
-            Log.d(LOGTAG, "Not doing adaptive bitrate");
+            Log.d(TAG, "Not doing adaptive bitrate");
         }
         Toast.makeText(getApplicationContext(), "Connection success", Toast.LENGTH_SHORT).show();
     }
@@ -696,10 +701,10 @@ public class Camera2Service extends Service implements ConnectChecker,
     }
 
     private void addCert() {
-        Log.d(LOGTAG, "add cert");
+        Log.d(TAG, "add cert");
         if (stream_self_signed_cert && cert_file != null && (protocol.equals("rtsps") || protocol.equals("rtmps"))) {
             try {
-                Log.d(LOGTAG, "Using cert: " + getFilesDir().getAbsolutePath());
+                Log.d(TAG, "Using cert: " + getFilesDir().getAbsolutePath());
                 KeyStore keyStore = KeyStore.getInstance("PKCS12");
                 FileInputStream caFile = new FileInputStream(cert_file);
                 keyStore.load(caFile, cert_password.toCharArray());
@@ -720,19 +725,19 @@ public class Camera2Service extends Service implements ConnectChecker,
                 }
 
             } catch (Exception e) {
-                Log.e(LOGTAG, e.getMessage());
+                Log.e(TAG, e.getMessage());
                 Toast.makeText(this, "Failed to open cert: " + e.getMessage(),
                         Toast.LENGTH_SHORT).show();
             }
         } else {
-            Log.d(LOGTAG, "Cert null");
+            Log.d(TAG, "Cert null");
         }
     }
 
     public boolean prepareEncoders() {
-        Log.d(LOGTAG, "prepareEncoders");
+        Log.d(TAG, "prepareEncoders");
         /*if (prepareAudio && prepareVideo) {
-            Log.d(LOGTAG, "already prepared");
+            Log.d(TAG, "already prepared");
             return true;
         }*/
         int width = resolution.getWidth();
@@ -748,19 +753,19 @@ public class Camera2Service extends Service implements ConnectChecker,
 
         if (Objects.equals(audio_codec, AudioCodec.G711.name()) && !protocol.equals("srt") && !protocol.equals("udp")) {
             getStream().setAudioCodec(AudioCodec.G711);
-            Log.d(LOGTAG, "Set audio codec to G711");
+            Log.d(TAG, "Set audio codec to G711");
         } else if (audio_codec.equals(AudioCodec.OPUS.name()) && !protocol.startsWith("rtmp")) {
             getStream().setAudioCodec(AudioCodec.OPUS);
-            Log.d(LOGTAG, "Set audio codec to OPUS");
+            Log.d(TAG, "Set audio codec to OPUS");
         } else {
             // Fall back to AAC since all streaming protocol support it
             getStream().setAudioCodec(AudioCodec.AAC);
-            Log.d(LOGTAG, "Set audio codec to AAC");
+            Log.d(TAG, "Set audio codec to AAC");
         }
 
-        Log.d(LOGTAG, "Setting video bitrate to ".concat(String.valueOf(bitrate)));
-        Log.d(LOGTAG, "Setting audio bitrate to ".concat(String.valueOf(audio_bitrate)));
-        Log.d(LOGTAG, "Setting res to ".concat(String.valueOf(width)).concat(" x ").concat(String.valueOf(height)));
+        Log.d(TAG, "Setting video bitrate to ".concat(String.valueOf(bitrate)));
+        Log.d(TAG, "Setting audio bitrate to ".concat(String.valueOf(audio_bitrate)));
+        Log.d(TAG, "Setting res to ".concat(String.valueOf(width)).concat(" x ").concat(String.valueOf(height)));
 
         addCert();
 
@@ -775,26 +780,26 @@ public class Camera2Service extends Service implements ConnectChecker,
             getStream().changeVideoSource(new Camera2Source(getApplicationContext()));
         }
 
-        Log.d(LOGTAG, "Sample rate: " + samplerate + " stereo " + stereo);
+        Log.d(TAG, "Sample rate: " + samplerate + " stereo " + stereo);
         prepareAudio = getStream().prepareAudio( samplerate, stereo, audio_bitrate * 1024, echo_cancel, noise_reduction);
 
         if (!enable_audio) {
-            Log.d(LOGTAG, "disabling audio");
+            Log.d(TAG, "disabling audio");
             getStream().changeAudioSource(new NoAudioSource());
         } else {
             getStream().changeAudioSource(new MicrophoneSource());
-            Log.d(LOGTAG, "enabling audio");
+            Log.d(TAG, "enabling audio");
         }
 
         if (openGlView != null)
             getStream().startPreview(openGlView, true);
 
-        Log.d(LOGTAG, "PrepareVideo: ".concat(String.valueOf(prepareVideo)).concat(" Audio ").concat(String.valueOf(prepareAudio)));
+        Log.d(TAG, "PrepareVideo: ".concat(String.valueOf(prepareVideo)).concat(" Audio ").concat(String.valueOf(prepareAudio)));
         return prepareVideo && prepareAudio;
     }
 
     public void getSettings() {
-        Log.d(LOGTAG, "Get settings");
+        Log.d(TAG, "Get settings");
         uid = preferences.getString(Preferences.UID, Preferences.UID_DEFAULT);
 
         String oldProtocol = protocol;
@@ -835,7 +840,7 @@ public class Camera2Service extends Service implements ConnectChecker,
         stream_self_signed_cert = preferences.getBoolean(Preferences.STREAM_SELF_SIGNED_CERT, Preferences.STREAM_SELF_SIGNED_CERT_DEFAULT);
         cert_file = preferences.getString(Preferences.STREAM_CERTIFICATE, Preferences.STREAM_CERTIFICATE_DEFAULT);
         cert_password = preferences.getString(Preferences.STREAM_CERTIFICATE_PASSWORD, Preferences.STREAM_CERTIFICATE_PASSWORD_DEFAULT);
-        Log.d(LOGTAG, "Got cert: " + cert_file);
+        Log.d(TAG, "Got cert: " + cert_file);
 
         /* Video Preferences */
         fps = Integer.parseInt(preferences.getString(Preferences.VIDEO_FPS, Preferences.VIDEO_FPS_DEFAULT));
@@ -851,11 +856,11 @@ public class Camera2Service extends Service implements ConnectChecker,
         audio_bitrate = Integer.parseInt(preferences.getString(Preferences.AUDIO_BITRATE, Preferences.AUDIO_BITRATE_DEFAULT));
         audio_codec = preferences.getString(Preferences.AUDIO_CODEC, Preferences.AUDIO_CODEC_DEFAULT);
         if (audio_codec.equals(AudioCodec.G711.name())) {
-            Log.d(LOGTAG, "Forcing G711 settings");
+            Log.d(TAG, "Forcing G711 settings");
             stereo = false;
             samplerate = 8000;
         } else {
-            Log.d(LOGTAG, "Audio Codec " + audio_codec);
+            Log.d(TAG, "Audio Codec " + audio_codec);
             stereo = preferences.getBoolean(Preferences.STEREO_AUDIO, Preferences.STEREO_AUDIO_DEFAULT);
             samplerate = Integer.parseInt(preferences.getString(Preferences.AUDIO_SAMPLE_RATE, Preferences.AUDIO_SAMPLE_RATE_DEFAULT));
         }
@@ -867,7 +872,7 @@ public class Camera2Service extends Service implements ConnectChecker,
 
         String oldVideoSource = videoSource;
         videoSource = preferences.getString(Preferences.VIDEO_SOURCE, Preferences.VIDEO_SOURCE_DEFAULT);
-        Log.d(LOGTAG, "videoSourcePref = " + videoSource);
+        Log.d(TAG, "videoSourcePref = " + videoSource);
 
         getResolutions();
         prepareEncoders();
@@ -876,7 +881,7 @@ public class Camera2Service extends Service implements ConnectChecker,
         if (videoSource.equals(Preferences.VIDEO_SOURCE_DEFAULT)) {
             Camera2Source camera2Source = (Camera2Source) getStream().getVideoSource();
             for (String camera : camera2Source.camerasAvailable()) {
-                Log.d(LOGTAG, "camerasAvailable: " + camera);
+                Log.d(TAG, "camerasAvailable: " + camera);
             }
         }
 
@@ -891,7 +896,7 @@ public class Camera2Service extends Service implements ConnectChecker,
     }
 
     private void getCamera2Resolutions() {
-        Log.d(LOGTAG, "Get res");
+        Log.d(TAG, "Get res");
 
         if (videoSource.equals(Preferences.VIDEO_SOURCE_DEFAULT)) {
             Camera2Source camera2Source = new Camera2Source(getApplicationContext());
@@ -904,7 +909,7 @@ public class Camera2Service extends Service implements ConnectChecker,
             } else {
                 resolution = resolutions.get(Integer.parseInt(resolution_pref));
             }
-            Log.d(LOGTAG, "getResolution ".concat(String.valueOf(resolution.getWidth())).concat(" x ").concat(String.valueOf(resolution.getHeight())));
+            Log.d(TAG, "getResolution ".concat(String.valueOf(resolution.getWidth())).concat(" x ").concat(String.valueOf(resolution.getHeight())));
         }
     }
 
@@ -913,7 +918,7 @@ public class Camera2Service extends Service implements ConnectChecker,
             int width = Integer.parseInt(preferences.getString(Preferences.USB_WIDTH, Preferences.USB_WIDTH_DEFAULT));
             int height = Integer.parseInt(preferences.getString(Preferences.USB_HEIGHT, Preferences.USB_HEIGHT_DEFAULT));
             resolution = new Size(width, height);
-            Log.i(LOGTAG, "Got USB Res " + width + " x " + height);
+            Log.i(TAG, "Got USB Res " + width + " x " + height);
         }
     }
 
@@ -924,13 +929,13 @@ public class Camera2Service extends Service implements ConnectChecker,
 
     @Override
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, @Nullable String s) {
-        Log.d(LOGTAG, "onSharedPreferenceChanged");
+        Log.d(TAG, "onSharedPreferenceChanged");
         if (s != null && !s.equals(Preferences.TEXT_OVERLAY))
             getSettings();
     }
 
     private void startRecording() {
-        Log.d(LOGTAG, "Start recording");
+        Log.d(TAG, "Start recording");
         if (record) {
             try {
                 if (!folder.exists()) {
@@ -938,7 +943,7 @@ public class Camera2Service extends Service implements ConnectChecker,
                 }
 
                 if (enable_audio && !audio_codec.equals(AudioCodec.AAC.name())) {
-                    Log.d(LOGTAG, "Trying to record but audio codec is " + audio_codec);
+                    Log.d(TAG, "Trying to record but audio codec is " + audio_codec);
                     // Recordings only support AAC audio and will fail if any other codec is used.
                     // This attempts to create a new recording controller using AAC.
                     // It allows the video to record, but not audio, which is better than no video or audio.
@@ -969,22 +974,22 @@ public class Camera2Service extends Service implements ConnectChecker,
                     }
                 } else {
                     getStream().startRecord(folder.getAbsolutePath().concat("/").concat(currentDateAndTime).concat(".mp4"), new RecordingListener());
-                    Log.d(LOGTAG, "Recording!");
+                    Log.d(TAG, "Recording!");
                     Toast.makeText(this, "Recording... ", Toast.LENGTH_SHORT).show();
                 }
             } catch (IOException e) {
-                Log.e(LOGTAG, "Failed to start recording", e);;
+                Log.e(TAG, "Failed to start recording", e);;
                 getStream().stopRecord();
                 PathUtils.updateGallery(this, folder.getAbsolutePath().concat("/").concat(currentDateAndTime).concat(".mp4"));
                 Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show();
             }
         } else {
-            Log.d(LOGTAG, "recording disabled");
+            Log.d(TAG, "recording disabled");
         }
     }
 
     private void stopRecording() {
-        Log.d(LOGTAG, "Stop recording");
+        Log.d(TAG, "Stop recording");
         if (getStream().isRecording()) {
             getStream().stopRecord();
             PathUtils.updateGallery(this, folder.getAbsolutePath().concat("/").concat(currentDateAndTime).concat(".mp4"));
@@ -995,7 +1000,7 @@ public class Camera2Service extends Service implements ConnectChecker,
     }
 
     public void startStream() {
-        Log.d(LOGTAG, "startStream");
+        Log.d(TAG, "startStream");
         if (!getStream().isStreaming() && !getStream().isRecording()) {
             if (protocol.equals("rtsp") && tcp) {
                 RtspStreamClient rtspStreamClient = (RtspStreamClient) getStream().getStreamClient();
@@ -1011,7 +1016,7 @@ public class Camera2Service extends Service implements ConnectChecker,
                     try {
                         getStream().getStreamClient().setAuthorization(username, password);
                     } catch (NotImplementedError e) {
-                        Log.e(LOGTAG, e.getMessage());
+                        Log.e(TAG, e.getMessage());
                     }
                 }
 
@@ -1039,7 +1044,7 @@ public class Camera2Service extends Service implements ConnectChecker,
                             _locManager.requestLocationUpdates(LocationManager.FUSED_PROVIDER, 5000, 0, _locListener);
                         else
                             _locManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000, 0, _locListener);
-                        Log.d(LOGTAG,  "Requesting Location updates");
+                        Log.d(TAG,  "Requesting Location updates");
                         sensorManager.registerListener(this, magnetometer, SensorManager.SENSOR_DELAY_GAME);
                         sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
 
@@ -1082,14 +1087,14 @@ public class Camera2Service extends Service implements ConnectChecker,
                             String cot = xmlMapper.writeValueAsString(event);
                             multicastClient.send_cot(cot);
                         } catch (JsonProcessingException e) {
-                            Log.d(LOGTAG, "Failed to generate CoT: " + e.getMessage());
+                            Log.d(TAG, "Failed to generate CoT: " + e.getMessage());
                         }
 
                     } catch (Exception e) {
-                        Log.e(LOGTAG, "Failed to send UDP CoT", e);
+                        Log.e(TAG, "Failed to send UDP CoT", e);
                     }
                 }
-                Log.d(LOGTAG, url);
+                Log.d(TAG, url);
 
                 if (videoSource.equals(Preferences.VIDEO_SOURCE_DEFAULT)) {
                     Camera2Source camera2Source = (Camera2Source) getStream().getVideoSource();
@@ -1099,7 +1104,7 @@ public class Camera2Service extends Service implements ConnectChecker,
 
                 if (stream) {
                     getStream().startStream(url);
-                    Log.d(LOGTAG, "Started stream to ".concat(url));
+                    Log.d(TAG, "Started stream to ".concat(url));
                     if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
                             ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                         //This will probably never show since the OnBoardingActivity forces users to grant permission before using the app
@@ -1111,8 +1116,7 @@ public class Camera2Service extends Service implements ConnectChecker,
                         _locManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000, 0, _locListener);
                         postVideoStream();
                         if (!protocol.equals("udp")) {
-                            Log.d(LOGTAG, "Starting Tcp Thread");
-                            tcpClient = new TcpClient(getApplicationContext(), address, port, message -> Log.d(LOGTAG, message));
+                            tcpClient = new TcpClient(getApplicationContext(), address, port, message -> Log.d(TAG, message));
                             tcpClientThread = new Thread(tcpClient);
                             tcpClientThread.start();
                         }
@@ -1132,12 +1136,12 @@ public class Camera2Service extends Service implements ConnectChecker,
     }
 
     public void stopStream(String error, String broadcastIntent) {
-        Log.d(LOGTAG, "stopStream " + error);
+        Log.d(TAG, "stopStream " + error);
         if (getStream().isStreaming())
             getStream().stopStream();
 
         if (tcpClient != null) {
-            Log.d(LOGTAG, "Stopping TcpClient");
+            Log.d(TAG, "Stopping TcpClient");
             tcpClient.setmRun(false);
             tcpClientThread.interrupt();
         }
@@ -1195,12 +1199,12 @@ public class Camera2Service extends Service implements ConnectChecker,
                         if (savedSuccessfully) {
                             showNotification(getString(R.string.saved_photo), true);
                         } else {
-                            Log.e(LOGTAG, "Failed to save photo");
+                            Log.e(TAG, "Failed to save photo");
                             showNotification(getString(R.string.saved_photo_failed), false);
                         }
                     }
                 } catch (NullPointerException | IOException e) {
-                    Log.e(LOGTAG, "Failed to save photo: ".concat(e.getMessage()));
+                    Log.e(TAG, "Failed to save photo: ".concat(e.getMessage()));
                     showNotification(getString(R.string.saved_photo_failed) + ": " + e.getMessage(), false);
                 }
             });
@@ -1210,7 +1214,7 @@ public class Camera2Service extends Service implements ConnectChecker,
     class ICULocationListener implements LocationListener {
         @Override
         public void onLocationChanged(@NonNull Location location) {
-            Log.d(LOGTAG, "onLocationChanged");
+            Log.d(TAG, "onLocationChanged");
             try {
                 last_fix_time = System.currentTimeMillis();
                 getApplicationContext().sendBroadcast(new Intent(LOCATION_CHANGE));
@@ -1226,7 +1230,7 @@ public class Camera2Service extends Service implements ConnectChecker,
                 event event = new event();
                 event.setUid(uid);
 
-                Point point = new Point(location.getLatitude(), location.getLongitude(), location.getAltitude());
+                Point point = new Point(location.getLatitude(), location.getLongitude(), 0.0);
                 event.setPoint(point);
 
                 Contact contact = new Contact(path);
@@ -1264,8 +1268,10 @@ public class Camera2Service extends Service implements ConnectChecker,
                 else if (protocol.equals("udp") && multicastClient != null)
                     multicastClient.send_cot(cot);
 
-            } catch (Exception e) {
-                Log.e(LOGTAG, "Failed to send location to ATAK: " + e.getLocalizedMessage());
+            } catch (Exception ex) {
+                StringWriter sw = new StringWriter();
+                ex.printStackTrace(new PrintWriter(sw));
+                Log.e(TAG, "Failed to send location to ATAK: " + ex.getMessage() + " - " + sw);
             }
         }
     }
@@ -1283,7 +1289,7 @@ public class Camera2Service extends Service implements ConnectChecker,
 
             RequestBody requestBody = RequestBody.create(xmlMapper.writeValueAsString(VideoConnections).getBytes());
 
-            boolean useSSL = false; //preferences.getBoolean(Preferences.ATAK_SERVER_SSL, false);
+            boolean useSSL = preferences.getBoolean(Preferences.ATAK_SERVER_SSL, false);
 
             String prefix = "http://";
             int port = 8080;
@@ -1299,7 +1305,7 @@ public class Camera2Service extends Service implements ConnectChecker,
                     .append(port)
                     .append("/Marti/vcm");
 
-            Log.d(LOGTAG, "Connecting to " + sb);
+            Log.d(TAG, "Connecting to " + sb);
             Request request = new Request.Builder()
                     .url(sb.toString())
                     .post(requestBody)
@@ -1308,15 +1314,15 @@ public class Camera2Service extends Service implements ConnectChecker,
             executor.execute(() -> {
                 try {
                     Response response = okHttpClient.newCall(request).execute();
-                    Log.d(LOGTAG, "Posted video: " + response.message() + " " + response.code());
-                    Log.d(LOGTAG, response.toString());
+                    Log.d(TAG, "Posted video: " + response.message() + " " + response.code());
+                    Log.d(TAG, response.toString());
                 } catch (IOException e) {
-                    Log.e(LOGTAG, "Failed to post video stream: " + e.getMessage());
+                    Log.e(TAG, "Failed to post video stream: " + e.getMessage());
                 }
             });
         } catch (Exception e) {
-            Log.e(LOGTAG, "Failed to post video");
-            Log.e(LOGTAG, e.toString());
+            Log.e(TAG, "Failed to post video");
+            Log.e(TAG, e.toString());
         }
     }
 }

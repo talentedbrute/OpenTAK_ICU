@@ -122,6 +122,8 @@
     <string name="atak_auth">Enable ATAK Server Authentication</string>
     <string name="atak_ssl">Connect to the ATAK Server via SSL</string>
     <string name="atak_ssl_summary">Disable for TCP</string>
+    <string name="atak_cert_enrollment">Connect to the ATAK Server using Certificate Enrollment</string>
+    <string name="atak_cert_enrollment_summary">Use the provided username/password to request a certificate from the server.  Disable to specify the server and clients certificates.</string>
     <string name="video_preferences">Video Preferences</string>
     <string name="stream_preferences">Streaming Settings</string>
     <string name="audio_preferences">Audio Settings</string>

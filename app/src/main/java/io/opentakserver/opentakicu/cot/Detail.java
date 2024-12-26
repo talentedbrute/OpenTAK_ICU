@@ -1,5 +1,7 @@
 package io.opentakserver.opentakicu.cot;
 
+import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
+
 public class Detail {
     Contact contact;
     __Video __video;
@@ -10,6 +12,9 @@ public class Detail {
     Track track;
     Status status;
 
+    @JacksonXmlProperty(localName = "TakControl")
+    TakControl takControl;
+
     public Detail(Contact contact, __Video __video, Device device, Sensor sensor, Takv takv, uid uid, Track track, Status status) {
         this.contact = contact;
         this.__video = __video;
@@ -19,6 +24,17 @@ public class Detail {
         this.uid = uid;
         this.track = track;
         this.status = status;
+    }
+
+    public Detail(TakControl takControl) {
+        this.takControl = takControl;
+        this.contact = null;
+        this.__video = null;
+        this.device = null;
+        this.sensor = null;
+        this.takv = null;
+        this.uid = null;
+        this.track = null;
     }
 
     public Contact getContact() {
@@ -84,4 +100,7 @@ public class Detail {
     public void setStatus(Status status) {
         this.status = status;
     }
+
+    public TakControl getTakControl() { return takControl; }
+    public void setTakControl(final TakControl takControl) { this.takControl = takControl; }
 }

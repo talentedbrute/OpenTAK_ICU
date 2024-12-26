@@ -51,39 +51,46 @@
             android:title="@string/atak_ssl"
             app:summary="@string/atak_ssl_summary"
             android:dependency="send_cot" />
+        <SwitchPreference
+            android:defaultValue="true"
+            android:key="atak_cert_enrollment"
+            android:disableDependentsState="true"
+            android:title="@string/atak_cert_enrollment"
+            app:summary="@string/atak_cert_enrollment_summary"
+            android:dependency="atak_ssl" />
         <Preference
-            android:dependency="atak_ssl"
+            android:dependency="atak_cert_enrollment"
             android:key="trust_store_certificate"
             android:selectAllOnFocus="true"
             android:singleLine="true"
             android:title="@string/trust_store_cert" />
         <EditTextPreference
             android:defaultValue="atakatak"
-            android:dependency="atak_ssl"
+            android:dependency="atak_cert_enrollment"
             android:key="trust_store_cert_password"
             android:selectAllOnFocus="true"
             android:singleLine="true"
             android:title="@string/trust_store_cert_password" />
         <Preference
-            android:dependency="atak_ssl"
+            android:dependency="atak_cert_enrollment"
             android:key="test_trust_store"
             android:title="@string/test_trust_store"
             app:summary="@string/test_certificate_description" />
         <Preference
-            android:dependency="atak_ssl"
+            android:dependency="atak_cert_enrollment"
             android:key="client_certificate"
             android:selectAllOnFocus="true"
             android:singleLine="true"
             android:title="@string/client_cert" />
         <EditTextPreference
             android:defaultValue="atakatak"
-            android:dependency="atak_ssl"
+            android:dependency="atak_cert_enrollment"
             android:key="client_cert_password"
             android:selectAllOnFocus="true"
             android:singleLine="true"
             android:title="@string/client_cert_password" />
         <Preference
-            android:dependency="atak_ssl"
+            android:dependency="atak_cert_enrollment"
             android:key="test_client_cert"
             android:title="@string/test_client_cert"
             app:summary="@string/test_certificate_description" />
