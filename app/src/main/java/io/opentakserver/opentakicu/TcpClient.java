@@ -10,6 +10,7 @@ import android.util.Log;
 import com.ctc.wstx.stax.WstxInputFactory;
 import com.ctc.wstx.stax.WstxOutputFactory;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.dataformat.xml.XmlFactory;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 
@@ -21,34 +22,40 @@ import io.opentakserver.opentakicu.cot.Contact;
 import io.opentakserver.opentakicu.cot.Detail;
 import io.opentakserver.opentakicu.cot.Point;
 import io.opentakserver.opentakicu.cot.Status;
+import io.opentakserver.opentakicu.cot.TakControl;
+import io.opentakserver.opentakicu.cot.TakProtocolSupport;
 import io.opentakserver.opentakicu.cot.Takv;
 import io.opentakserver.opentakicu.cot.auth;
 import io.opentakserver.opentakicu.cot.Cot;
 import io.opentakserver.opentakicu.cot.event;
+import io.opentakserver.opentakicu.cot.__group;
+import io.opentakserver.opentakicu.cot.precisionlocation;
 import io.opentakserver.opentakicu.cot.uid;
+import io.opentakserver.opentakicu.parser.CoT;
+import io.opentakserver.opentakicu.utils.CertificateEnrollment;
+import io.opentakserver.opentakicu.utils.Constants;
+import io.opentakserver.opentakicu.utils.PEMImporter;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.PrintWriter;
-import java.net.InetAddress;
+import java.io.StringWriter;
 import java.net.Socket;
 import java.net.SocketException;
-import java.net.SocketTimeoutException;
+import java.nio.charset.Charset;
 import java.security.KeyStore;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManagerFactory;
 
-public class TcpClient extends Thread implements SharedPreferences.OnSharedPreferenceChangeListener {
+public class TcpClient implements Runnable, SharedPreferences.OnSharedPreferenceChangeListener {
 
-    public static final String TAG = TcpClient.class.getSimpleName();
+    public static final String TAG = Constants.TAG_PREFIX + TcpClient.class.getSimpleName();
     public static final String TAK_SERVER_CONNECTED = "tak_server_connected";
     public static final String TAK_SERVER_DISCONNECTED = "tak_server_disconnected";
 
@@ -60,25 +67,31 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
     private String atak_username;
     private String atak_password;
     private boolean atak_ssl = false;
-    private boolean atak_ssl_self_signed = true;
+    private boolean atak_cert_enrollment = true;
     private String atak_trust_store;
     private String atak_trust_store_password;
     private String atak_client_cert;
     private String atak_client_cert_password;
     private String uid;
     private String path;
+    private String callsign;
 
     private Socket socket;
-    private SSLSocket sslSocket;
     private Context context;
     private Intent batteryStatus;
-
-    private String mServerMessage;
     private OnMessageReceived mMessageListener;
     public boolean mRun = false;
-    private PrintWriter mBufferOut;
-    private BufferedReader mBufferIn;
+    private OutputStream mBufferOut;
+    private InputStream mBufferIn;
+    private Thread pingSenderThread;
+    private XmlMapper xmlMapper;
 
+    public class TAKServerConnectionException extends Exception {
+        private final String message;
+        public TAKServerConnectionException(final String message) {
+            this.message = message;
+        }
+    }
     /**
      * Constructor of the class. OnMessagedReceived listens for the messages received from server
      */
@@ -92,72 +105,48 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
         batteryStatus = context.registerReceiver(null, ifilter);
 
         prefs = PreferenceManager.getDefaultSharedPreferences(context);
+
+        XmlFactory xmlFactory = XmlFactory.builder()
+                .xmlInputFactory(new WstxInputFactory())
+                .xmlOutputFactory(new WstxOutputFactory())
+                .build();
+
+        xmlMapper = XmlMapper.builder(xmlFactory).build();
+        xmlMapper.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
+
         getSettings();
     }
 
-    /**
-     * Sends the message entered by client to the server
-     *
-     * @param message text entered by client
-     */
-    public void sendMessage(final String message) {
+    private void connect() throws TAKServerConnectionException {
         try {
-            Runnable runnable = () -> {
-                if (mBufferOut != null) {
-                    mBufferOut.println(message);
-                    mBufferOut.flush();
-                }
-            };
-            Thread thread = new Thread(runnable);
-            thread.start();
-        } catch (Exception e) {
-            Log.e(TAG ,"Error sending message", e);
-        }
-    }
-
-    /**
-     * Close the connection and release the members
-     */
-    public void stopClient() {
-        mRun = false;
-
-        if (mBufferOut != null) {
-            mBufferOut.flush();
-
-            try {
-                mBufferOut.close();
-                if (sslSocket != null)
-                    sslSocket.close();
-                if (socket != null)
-                    socket.close();
-            } catch (IOException e) {
-                Log.e(TAG, "Failed to close buffer", e);
-            }
-        }
-
-        prefs.unregisterOnSharedPreferenceChangeListener(this);
-        mMessageListener = null;
-        mBufferIn = null;
-        mBufferOut = null;
-        mServerMessage = null;
-        socket = null;
-        sslSocket = null;
-        Log.d(TAG, "Sending Broadcast " + TAK_SERVER_DISCONNECTED);
-        context.sendBroadcast(new Intent(TAK_SERVER_DISCONNECTED).setPackage(context.getPackageName()));
-    }
-
-    public void run() {
-        mRun = true;
-
-        try {
-            InetAddress serverAddr = InetAddress.getByName(serverAddress);
-
             Log.d(TAG, "Connecting...");
             getSettings();
 
             if (atak_ssl) {
-                if (atak_ssl_self_signed) {
-                    Log.d(TAG, "Connecting via SSL to a server with a self signed cert");
+                SSLSocketFactory factory = null;
+                if (atak_cert_enrollment) {
+                    Log.d(TAG, "Connecting via SSL with certificate enrollment");
+                    String certsDir = context.getFilesDir() + "/certs";
+                    String clientPemPath = certsDir + "/client.pem";
+                    String serverPemPath = certsDir + "/server.pem";
+
+                    File clientPem = new File(clientPemPath);
+                    File serverPem = new File(serverPemPath);
+
+                    if (!clientPem.exists() || !serverPem.exists()) {
+                        if (atak_username == null || atak_username.isEmpty() || atak_password == null || atak_password.isEmpty()) {
+                            throw new TAKServerConnectionException("Certificate enrollment requires a username and password. Enable authentication and set credentials in ATAK settings.");
+                        }
+                        Log.i(TAG, "Certificates not found, starting enrollment");
+                        CertificateEnrollment enrollment = new CertificateEnrollment(context, serverAddress, atak_username, atak_password);
+                        if (!enrollment.enroll(clientPemPath, serverPemPath)) {
+                            throw new TAKServerConnectionException("Certificate enrollment failed for server: " + serverAddress);
+                        }
+                    }
+
+                    factory = PEMImporter.createSSLFactory(new File(clientPemPath), new File(serverPemPath), "atakatak");
+                } else {
+                    Log.d(TAG, "Connecting via SSL with manual certificates");
                     KeyStore trusted = KeyStore.getInstance("PKCS12");
                     FileInputStream trust_store = new FileInputStream(atak_trust_store);
 
@@ -173,46 +162,125 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
                     TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
                     trustManagerFactory.init(trusted);
 
-
                     KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-                    kmf.init(client_cert_keystore, atak_trust_store_password.toCharArray());
+                    kmf.init(client_cert_keystore, atak_client_cert_password.toCharArray());
                     SSLContext sslContext = SSLContext.getInstance("TLSv1.3");
-                    sslContext.init(kmf.getKeyManagers(),trustManagerFactory.getTrustManagers(),null);
+                    sslContext.init(kmf.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
 
-                    SSLSocketFactory factory = sslContext.getSocketFactory();
-                    sslSocket = (SSLSocket) factory.createSocket(serverAddr, port);
-                    sslSocket.setSoTimeout(1000);
-                } else {
-                    Log.d(TAG, "Connecting vi SSL to a server with a signed cert");
-                    SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
-                    sslSocket = (SSLSocket) factory.createSocket(serverAddr, port);
-                    sslSocket.setSoTimeout(1000);
+                    factory = sslContext.getSocketFactory();
                 }
-                mBufferOut = new PrintWriter(new BufferedWriter(new OutputStreamWriter(sslSocket.getOutputStream())), true);
-                mBufferIn = new BufferedReader(new InputStreamReader(sslSocket.getInputStream()));
-                context.sendBroadcast(new Intent(TAK_SERVER_CONNECTED).setPackage(context.getPackageName()));
+
+                if (factory == null) {
+                    Log.e(TAG, "SSL Socket Factory is NULL");
+                    throw new TAKServerConnectionException("Unable to connect to server: " + serverAddress + ":" + port);
+                }
+
+                Log.d(TAG, "Connecting to " + serverAddress + ":" + port);
+                socket = factory.createSocket(serverAddress, port);
             } else {
                 Log.d(TAG, "Connecting via TCP");
-                socket = new Socket(serverAddr, port);
+                socket = new Socket(serverAddress, port);
                 socket.setSoTimeout(1000);
-                mBufferOut = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())), true);
-                mBufferIn = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                context.sendBroadcast(new Intent(TAK_SERVER_CONNECTED).setPackage(context.getPackageName()));
                 Log.d(TAG, "Connected via TCP");
             }
 
-            // Janky way to try to prevent a race condition where we send the initial CoT before the socket is connected
-            Log.d(TAG, "Sleeping");
-            Thread.sleep(1000);
-            Log.d(TAG, "awake");
+            mBufferOut = socket.getOutputStream();
+            mBufferIn = socket.getInputStream();
+            context.sendBroadcast(new Intent(TAK_SERVER_CONNECTED).setPackage(context.getPackageName()));
 
-            XmlFactory xmlFactory = XmlFactory.builder()
-                    .xmlInputFactory(new WstxInputFactory())
-                    .xmlOutputFactory(new WstxOutputFactory())
-                    .build();
+            // Send out the version information about what we support as a client
+            event versionEvent = new event();
+            versionEvent.setUid("protouid");
+            versionEvent.setType(Constants.CT_TAKP_V);
+            versionEvent.setPoint(new Point(0.0, 0.0, 0.0));
+            Detail detail = new Detail(new TakControl(new TakProtocolSupport()));
+            versionEvent.setDetail(detail);
+            sendMessage(xmlMapper.writeValueAsString(versionEvent));
+        } catch (Exception e) {
+            Log.e(TAG, "Error", e);
+            stopClient();
+        }
+    }
+    /**
+     * Sends the message entered by client to the server
+     *
+     * @param message text entered by client
+     */
+    public void sendMessage(final String message) {
+        try {
+            Runnable runnable = () -> {
+                try {
+                    if (mBufferOut != null && !socket.isClosed()) {
+                        mBufferOut.write(message.getBytes(Charset.defaultCharset()));
+                        mBufferOut.flush();
+                    } else {
+                        Log.i(TAG, "No Connection to TAK Server");
+                    }
+                } catch(SocketException ex) {
+                    StringWriter sw = new StringWriter();
+                    ex.printStackTrace(new PrintWriter(sw));
+                    Log.e(TAG, "SocketException " + ex.getMessage() + ": " + sw);
+                    stopClient();
+                    stopPing();
+                } catch (IOException ex) {
+                    StringWriter sw = new StringWriter();
+                    ex.printStackTrace(new PrintWriter(sw));
+                    Log.e(TAG, "IOException " + ex.getMessage() + ": " + sw);
+                }
+            };
+            Thread thread = new Thread(runnable);
+            thread.start();
+        } catch(Exception ex) {
+            StringWriter sw = new StringWriter();
+            ex.printStackTrace(new PrintWriter(sw));
+            Log.e(TAG, "UnknownException " + ex.getMessage() + ": " + sw);
+        }
+    }
 
-            XmlMapper xmlMapper = XmlMapper.builder(xmlFactory).build();
-            xmlMapper.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
+    /**
+     * Close the connection and release the members
+     */
+    public void stopClient() {
+        mRun = false;
+
+        if(mBufferIn != null) {
+            try {
+                mBufferIn.close();
+            } catch(Exception ex) {
+
+            }
+        }
+        if (mBufferOut != null) {
+            try {
+                mBufferOut.flush();
+            } catch(IOException ex) {
+                //DO nothing
+            }
+
+            try {
+                mBufferOut.close();
+                if (socket != null)
+                    socket.close();
+            } catch (IOException e) {
+                Log.e(TAG, "Failed to close buffer", e);
+            }
+        }
+
+        stopPing();
+
+        prefs.unregisterOnSharedPreferenceChangeListener(this);
+        mMessageListener = null;
+        mBufferIn = null;
+        mBufferOut = null;
+        socket = null;
+        Log.d(TAG, "Sending Broadcast " + TAK_SERVER_DISCONNECTED);
+        context.sendBroadcast(new Intent(TAK_SERVER_DISCONNECTED).setPackage(context.getPackageName()));
+    }
+
+    @Override
+    public void run() {
+        try {
+            connect();
 
             if (atak_auth) {
                 Cot cot = new Cot(atak_username, atak_password, uid);
@@ -220,44 +288,23 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
                 sendMessage(xmlMapper.writeValueAsString(atakAuth));
             }
 
-            // FTS requires this CoT to be sent before any others
-            event event = new event();
-            event.setUid(uid);
-
-            Point point = new Point(9999999, 9999999, 9999999);
-            event.setPoint(point);
-
-            Contact contact = new Contact(path);
-
-            Takv takv = new Takv(context);
-
-            int level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
-            int scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
-
-            float batteryPct = level * 100 / (float)scale;
-
-            Detail detail = new Detail(contact, null, null, null, takv, new uid(path), null, new Status(batteryPct));
-            event.setDetail(detail);
-
-            sendMessage(xmlMapper.writeValueAsString(event));
-
             try {
-                //in this while the client listens for the messages sent by the server
-                while (mRun) {
-                    try {
-                        mServerMessage = mBufferIn.readLine();
-                        if (mServerMessage != null && mMessageListener != null) {
-                            mMessageListener.messageReceived(mServerMessage);
+                byte[] buffer = new byte[1024];
+                int read;
+                StringBuilder sb = new StringBuilder();
+                while (!Thread.currentThread().isInterrupted()) {
+                    while ((read = mBufferIn.read(buffer)) != -1) {
+                        sb.append(new String(buffer, 0, read));
+                        if (sb.toString().contains(Constants.END_EVENT)) {
+                            processCoT(sb.toString());
+                            sb.setLength(0);    // Reset builder
                         }
-                    } catch (SocketException e) {
-                        Log.e(TAG, "Socket closed");
-                        stopClient();
-                    } catch (SocketTimeoutException e) {}
+                    }
                 }
-                stopClient();
-            } catch (Exception e) {
-                Log.e(TAG, "Error", e);
-                stopClient();
+            } catch(IOException ex) {
+                StringWriter sw = new StringWriter();
+                ex.printStackTrace(new PrintWriter(sw));
+                Log.e(TAG, "IOException " + ex.getMessage() + ": " + sw);
             }
 
         } catch (Exception e) {
@@ -266,9 +313,103 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
         }
     }
 
+    private void processCoT(final String message) {
+        CoT cot = new CoT(message);
+        Log.d(TAG, "Received: " + cot.getType());
+
+        switch(cot.getType()) {
+            case Constants.CT_TAKP_V:
+                Log.i(TAG, "Processing Version String");
+                sendClientAnnouncement();
+                startPing();
+                break;
+            case Constants.CT_CONN_RESPONSE:
+                Log.i(TAG, "Received Pong");
+                break;
+            default:
+                if (mMessageListener != null && message != null) {
+                    mMessageListener.messageReceived(message);
+                }
+                break;
+        }
+    }
+
+    private void sendClientAnnouncement() {
+        try {
+            event announcement = new event();
+            announcement.setUid(uid);
+            announcement.setType("b-m-p-s-p-loc");
+            announcement.setPoint(new Point(9999999, 9999999, 9999999));
+
+            Contact contact = new Contact(callsign, "*:-1:stcp");
+            Takv takv = new Takv(context);
+
+            int level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+            int scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+            float batteryPct = level * 100 / (float) scale;
+
+            Detail detail = new Detail(contact, null, null, null, takv, new uid(callsign), null, new Status(batteryPct));
+            detail.setPrecisionlocation(new precisionlocation("UNKNOWN", "UNKNOWN"));
+            announcement.setDetail(detail);
+
+            Log.i(TAG, "Sending client announcement with callsign: " + callsign);
+            sendMessage(xmlMapper.writeValueAsString(announcement));
+        } catch (JsonProcessingException ex) {
+            Log.e(TAG, "Failed to send client announcement", ex);
+        }
+    }
+
+    private String getPing() throws JsonProcessingException {
+        event takPing = new event();
+        takPing.setType(Constants.CT_CONN_REQUEST);
+        takPing.setUid("takPing");
+        takPing.setPoint(new Point(0.0, 0.0,0.0));
+        return xmlMapper.writeValueAsString(takPing);
+    }
+    /**
+     * startPing - this sends a ping to the TAK Server every 30 seconds to let it konw
+     *   we are still active
+     */
+    private void startPing() {
+        try {
+            sendMessage(getPing());
+
+            Runnable runnable = () -> {
+                while (!Thread.currentThread().isInterrupted()) {
+                    try {
+                        Thread.sleep(30000);
+                        Log.i(TAG, "Sending Ping");
+                        sendMessage(getPing());
+                    } catch(JsonProcessingException ex) {
+                        StringWriter sw = new StringWriter();
+                        ex.printStackTrace(new PrintWriter(sw));
+                        Log.e(TAG,"Caught JsonProcessingException: " + ex.getMessage() + " - " + sw);
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            };
+            pingSenderThread = new Thread(runnable);
+            pingSenderThread.start();
+        } catch(JsonProcessingException ex) {
+            StringWriter sw = new StringWriter();
+            ex.printStackTrace(new PrintWriter(sw));
+            Log.e(TAG,"Caught JsonProcessingException: " + ex.getMessage() + " - " + sw);
+        }
+    }
+
+    private void stopPing() {
+        if(pingSenderThread != null) {
+            pingSenderThread.interrupt();
+            pingSenderThread = null;
+        }
+    }
+
     public void setmRun(boolean mRun) {
-        if (!mRun)
+        if (!mRun) {
             Log.d(TAG, "Stopping thread");
+            stopClient();
+        }
         this.mRun = mRun;
     }
 
@@ -279,13 +420,14 @@ public class TcpClient extends Thread implements SharedPreferences.OnSharedPrefe
         atak_username = prefs.getString(Preferences.ATAK_SERVER_USERNAME, Preferences.ATAK_SERVER_USERNAME_DEFAULT);
         atak_password = prefs.getString(Preferences.ATAK_SERVER_PASSWORD, Preferences.ATAK_SERVER_PASSWORD_DEFAULT);
         atak_ssl = prefs.getBoolean(Preferences.ATAK_SERVER_SSL, Preferences.ATAK_SERVER_SSL_DEFAULT);
-        atak_ssl_self_signed = prefs.getBoolean(Preferences.ATAK_SERVER_SELF_SIGNED_CERT, Preferences.ATAK_SERVER_SELF_SIGNED_CERT_DEFAULT);
+        atak_cert_enrollment = prefs.getBoolean(Preferences.ATAK_CERT_ENROLLMENT, Preferences.ATAK_CERT_ENROLLMENT_DEFAULT);
         atak_trust_store = prefs.getString(Preferences.ATAK_SERVER_SSL_TRUST_STORE, Preferences.ATAK_SERVER_SSL_TRUST_STORE_DEFAULT);
         atak_trust_store_password = prefs.getString(Preferences.ATAK_SERVER_SSL_TRUST_STORE_PASSWORD, Preferences.ATAK_SERVER_SSL_TRUST_STORE_PASSWORD_DEFAULT);
         atak_client_cert = prefs.getString(Preferences.ATAK_SERVER_SSL_CLIENT_CERTIFICATE, Preferences.ATAK_SERVER_SSL_CLIENT_CERTIFICATE_DEFAULT);
         atak_client_cert_password = prefs.getString(Preferences.ATAK_SERVER_SSL_CLIENT_CERTIFICATE_PASSWORD, Preferences.ATAK_SERVER_SSL_CLIENT_CERTIFICATE_PASSWORD_DEFAULT);
         uid = prefs.getString(Preferences.UID, Preferences.UID_DEFAULT);
         path = prefs.getString(Preferences.STREAM_PATH, Preferences.STREAM_PATH_DEFAULT);
+        callsign = prefs.getString(Preferences.ATAK_CALLSIGN, Preferences.ATAK_CALLSIGN_DEFAULT) + "-ICU";
     }
 
     @Override

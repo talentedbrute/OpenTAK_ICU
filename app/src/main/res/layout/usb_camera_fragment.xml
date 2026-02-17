@@ -5,7 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:openDrawer="start"
-    android:id="@+id/activity_custom">
+    android:id="@+id/usb_camera_fragment">
 
     <View
         android:id="@+id/white_color_overlay"
@@ -16,7 +16,7 @@
         android:elevation="8dp" />
 
     <com.pedro.library.view.OpenGlView
-        android:id="@+id/openGlView"
+        android:id="@+id/usb_openGlView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         app:aspectRatioMode="adjust"
@@ -26,37 +26,7 @@
         tools:layout_editor_absoluteY="85dp" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/flashlight"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:clickable="true"
-        android:focusable="true"
-        app:backgroundTint="#00000000"
-        android:elevation="0dp"
-        app:elevation="0dp"
-        app:tint="@android:color/white"
-        app:layout_constraintBottom_toTopOf="@id/switch_camera"
-        app:layout_constraintEnd_toEndOf="@+id/openGlView"
-        app:useCompatPadding="true"
-        app:srcCompat="@drawable/flashlight_off" />
-
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/switch_camera"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:clickable="true"
-        android:focusable="true"
-        app:backgroundTint="#00000000"
-        android:elevation="0dp"
-        app:elevation="0dp"
-        app:tint="@android:color/white"
-        app:layout_constraintBottom_toTopOf="@id/b_start_stop"
-        app:layout_constraintEnd_toEndOf="@+id/openGlView"
-        app:useCompatPadding="true"
-        app:srcCompat="@drawable/ic_switch_camera" />
-
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/b_start_stop"
+        android:id="@+id/usb_b_start_stop"
         app:tint="#FF0000"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -66,12 +36,12 @@
         android:elevation="0dp"
         app:elevation="0dp"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="@+id/openGlView"
+        app:layout_constraintEnd_toEndOf="@+id/usb_openGlView"
         app:useCompatPadding="true"
         app:srcCompat="@drawable/ic_record" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/settingsButton"
+        android:id="@+id/usb_settingsButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:useCompatPadding="true"
@@ -82,11 +52,11 @@
         android:elevation="0dp"
         app:elevation="0dp"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="@+id/openGlView"
+        app:layout_constraintStart_toStartOf="@+id/usb_openGlView"
         app:srcCompat="@drawable/settings" />
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/pictureButton"
+        android:id="@+id/usb_pictureButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:useCompatPadding="true"
@@ -97,12 +67,12 @@
         android:elevation="0dp"
         app:elevation="0dp"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintLeft_toRightOf="@+id/settingsButton"
-        app:layout_constraintRight_toLeftOf="@+id/b_start_stop"
+        app:layout_constraintLeft_toRightOf="@+id/usb_settingsButton"
+        app:layout_constraintRight_toLeftOf="@+id/usb_b_start_stop"
         app:srcCompat="@drawable/camera" />
 
     <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/infoOverlay"
+        android:id="@+id/usb_infoOverlay"
         android:layout_width="150dp"
         android:layout_height="90dp"
         android:layout_marginEnd="5dp"
@@ -114,11 +84,11 @@
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="wrap_content"
             android:layout_height="match_parent"
-            android:id="@+id/labels"
+            android:id="@+id/usb_labels"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent">
             <TextView
-                android:id="@+id/location_fix"
+                android:id="@+id/usb_location_fix"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/location_fix"
@@ -127,41 +97,41 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
             <TextView
-                android:id="@+id/stream_path"
+                android:id="@+id/usb_stream_path"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/stream_path"
                 android:textColor="#FF00FFFF"
                 android:textSize="11sp"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/location_fix" />
+                app:layout_constraintTop_toBottomOf="@id/usb_location_fix" />
             <TextView
-                android:id="@+id/bitrate"
+                android:id="@+id/usb_bitrate"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/bitrate"
                 android:textColor="#FF00FFFF"
                 android:textSize="11sp"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/stream_path" />
+                app:layout_constraintTop_toBottomOf="@id/usb_stream_path" />
             <TextView
-                android:id="@+id/recording"
+                android:id="@+id/usb_recording"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/recording"
                 android:textColor="#FF00FFFF"
                 android:textSize="11sp"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/bitrate" />
+                app:layout_constraintTop_toBottomOf="@id/usb_bitrate" />
             <TextView
-                android:id="@+id/atak_connection"
+                android:id="@+id/usb_atak_connection"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/tak_server"
                 android:textColor="#FF00FFFF"
                 android:textSize="11sp"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/recording" />
+                app:layout_constraintTop_toBottomOf="@id/usb_recording" />
         </androidx.constraintlayout.widget.ConstraintLayout>
 
 
@@ -169,10 +139,10 @@
             android:layout_width="wrap_content"
             android:layout_height="match_parent"
             android:layout_marginStart="5dp"
-            app:layout_constraintStart_toEndOf="@+id/labels"
+            app:layout_constraintStart_toEndOf="@+id/usb_labels"
             app:layout_constraintTop_toTopOf="parent">
             <TextView
-                android:id="@+id/location_fix_status"
+                android:id="@+id/usb_location_fix_status"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 app:layout_constraintStart_toStartOf="parent"
@@ -180,35 +150,35 @@
                 android:textColor="#FF00FF00"
                 android:textSize="11sp" />
             <TextView
-                android:id="@+id/stream_path_name"
+                android:id="@+id/usb_stream_path_name"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/location_fix_status"
+                app:layout_constraintTop_toBottomOf="@id/usb_location_fix_status"
                 android:textColor="#FF00FFFF"
                 android:textSize="11sp" />
             <TextView
-                android:id="@+id/bitrate_value"
+                android:id="@+id/usb_bitrate_value"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/stream_path_name"
+                app:layout_constraintTop_toBottomOf="@id/usb_stream_path_name"
                 android:textColor="#FF00FFFF"
                 android:textSize="11sp" />
             <TextView
-                android:id="@+id/recording_status"
+                android:id="@+id/usb_recording_status"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/bitrate_value"
+                app:layout_constraintTop_toBottomOf="@id/usb_bitrate_value"
                 android:textColor="#FFFF0000"
                 android:textSize="11sp" />
             <TextView
-                android:id="@+id/atak_connection_status"
+                android:id="@+id/usb_atak_connection_status"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/recording_status"
+                app:layout_constraintTop_toBottomOf="@id/usb_recording_status"
                 android:textColor="#FFFFFF00"
                 android:textSize="11sp" />
         </androidx.constraintlayout.widget.ConstraintLayout>
