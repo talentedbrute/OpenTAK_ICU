@@ -80,6 +80,8 @@ public class Preferences {
     /* ATAK Preferences */
     public static final String ATAK_CALLSIGN = "atak_callsign";
     public static final String ATAK_CALLSIGN_DEFAULT = "OpenTAK-ICU";
+    public static final String ATAK_SENSOR_RANGE = "atak_sensor_range";
+    public static final String ATAK_SENSOR_RANGE_DEFAULT = "500";
     public static final String ATAK_SEND_COT = "send_cot";
     public static final boolean ATAK_SEND_COT_DEFAULT = false;
     public static final String ATAK_SEND_STREAM_DETAILS = "send_stream_details";

@@ -23,6 +23,15 @@
             app:summary="@string/atak_callsign_summary"
             android:dependency="send_cot" />
         <EditTextPreference
+            android:key="atak_sensor_range"
+            android:defaultValue="500"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:inputType="number"
+            android:title="@string/atak_sensor_range"
+            app:summary="@string/atak_sensor_range_summary"
+            android:dependency="send_cot" />
+        <EditTextPreference
             android:key="atak_address"
             android:selectAllOnFocus="true"
             android:singleLine="true"

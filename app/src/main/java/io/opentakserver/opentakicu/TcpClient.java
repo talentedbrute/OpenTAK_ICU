@@ -428,7 +428,7 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
         atak_client_cert_password = prefs.getString(Preferences.ATAK_SERVER_SSL_CLIENT_CERTIFICATE_PASSWORD, Preferences.ATAK_SERVER_SSL_CLIENT_CERTIFICATE_PASSWORD_DEFAULT);
         uid = prefs.getString(Preferences.UID, Preferences.UID_DEFAULT);
         path = prefs.getString(Preferences.STREAM_PATH, Preferences.STREAM_PATH_DEFAULT);
-        callsign = prefs.getString(Preferences.ATAK_CALLSIGN, Preferences.ATAK_CALLSIGN_DEFAULT);
+        callsign = prefs.getString(Preferences.ATAK_CALLSIGN, Preferences.ATAK_CALLSIGN_DEFAULT) + "-ICU";
     }
 
     @Override
