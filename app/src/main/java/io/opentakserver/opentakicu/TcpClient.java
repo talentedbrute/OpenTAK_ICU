@@ -28,6 +28,8 @@ import io.opentakserver.opentakicu.cot.Takv;
 import io.opentakserver.opentakicu.cot.auth;
 import io.opentakserver.opentakicu.cot.Cot;
 import io.opentakserver.opentakicu.cot.event;
+import io.opentakserver.opentakicu.cot.__group;
+import io.opentakserver.opentakicu.cot.precisionlocation;
 import io.opentakserver.opentakicu.cot.uid;
 import io.opentakserver.opentakicu.parser.CoT;
 import io.opentakserver.opentakicu.utils.CertificateEnrollment;
@@ -72,6 +74,7 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
     private String atak_client_cert_password;
     private String uid;
     private String path;
+    private String callsign;
 
     private Socket socket;
     private Context context;
@@ -286,26 +289,6 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
                 sendMessage(xmlMapper.writeValueAsString(atakAuth));
             }
 
-            // FTS requires this CoT to be sent before any others
-            event event = new event();
-            event.setUid(uid);
-
-            Point point = new Point(9999999, 9999999, 9999999);
-            event.setPoint(point);
-
-            Contact contact = new Contact(path);
-
-            Takv takv = new Takv(context);
-
-            int level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
-            int scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
-
-            float batteryPct = level * 100 / (float)scale;
-
-            Detail detail = new Detail(contact, null, null, null, takv, new uid(path), null, new Status(batteryPct));
-            event.setDetail(detail);
-            sendMessage(xmlMapper.writeValueAsString(event));
-
             try {
                 byte[] buffer = new byte[1024];
                 int read;
@@ -338,7 +321,7 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
         switch(cot.getType()) {
             case Constants.CT_TAKP_V:
                 Log.i(TAG, "Processing Version String");
-                // Starting ping thread
+                sendClientAnnouncement();
                 startPing();
                 break;
             case Constants.CT_CONN_RESPONSE:
@@ -349,6 +332,32 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
                     mMessageListener.messageReceived(message);
                 }
                 break;
+        }
+    }
+
+    private void sendClientAnnouncement() {
+        try {
+            event announcement = new event();
+            announcement.setUid(uid);
+            announcement.setType("b-m-p-s-p-loc");
+            announcement.setPoint(new Point(9999999, 9999999, 9999999));
+
+            Contact contact = new Contact(callsign, "*:-1:stcp");
+            Takv takv = new Takv(context);
+
+            int level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+            int scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+            float batteryPct = level * 100 / (float) scale;
+
+            Detail detail = new Detail(contact, null, null, null, takv, new uid(callsign), null, new Status(batteryPct));
+            detail.set__group(new __group("Cyan", "Team Member"));
+            detail.setPrecisionlocation(new precisionlocation("UNKNOWN", "UNKNOWN"));
+            announcement.setDetail(detail);
+
+            Log.i(TAG, "Sending client announcement with callsign: " + callsign);
+            sendMessage(xmlMapper.writeValueAsString(announcement));
+        } catch (JsonProcessingException ex) {
+            Log.e(TAG, "Failed to send client announcement", ex);
         }
     }
 
@@ -420,6 +429,7 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
         atak_client_cert_password = prefs.getString(Preferences.ATAK_SERVER_SSL_CLIENT_CERTIFICATE_PASSWORD, Preferences.ATAK_SERVER_SSL_CLIENT_CERTIFICATE_PASSWORD_DEFAULT);
         uid = prefs.getString(Preferences.UID, Preferences.UID_DEFAULT);
         path = prefs.getString(Preferences.STREAM_PATH, Preferences.STREAM_PATH_DEFAULT);
+        callsign = prefs.getString(Preferences.ATAK_CALLSIGN, Preferences.ATAK_CALLSIGN_DEFAULT);
     }
 
     @Override

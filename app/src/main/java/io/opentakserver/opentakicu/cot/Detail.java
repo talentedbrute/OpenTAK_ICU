@@ -5,12 +5,14 @@ import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 public class Detail {
     Contact contact;
     __Video __video;
+    __group __group;
     Device device;
     Sensor sensor;
     Takv takv;
     uid uid;
     Track track;
     Status status;
+    precisionlocation precisionlocation;
 
     @JacksonXmlProperty(localName = "TakControl")
     TakControl takControl;
@@ -103,4 +105,10 @@ public class Detail {
 
     public TakControl getTakControl() { return takControl; }
     public void setTakControl(final TakControl takControl) { this.takControl = takControl; }
+
+    public __group get__group() { return __group; }
+    public void set__group(__group __group) { this.__group = __group; }
+
+    public precisionlocation getPrecisionlocation() { return precisionlocation; }
+    public void setPrecisionlocation(precisionlocation precisionlocation) { this.precisionlocation = precisionlocation; }
 }

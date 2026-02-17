@@ -15,6 +15,14 @@
             app:summary="@string/send_stream_connection_details_summary"
             android:dependency="send_cot" />
         <EditTextPreference
+            android:key="atak_callsign"
+            android:defaultValue="OpenTAK-ICU"
+            android:selectAllOnFocus="true"
+            android:singleLine="true"
+            android:title="@string/atak_callsign"
+            app:summary="@string/atak_callsign_summary"
+            android:dependency="send_cot" />
+        <EditTextPreference
             android:key="atak_address"
             android:selectAllOnFocus="true"
             android:singleLine="true"

@@ -111,6 +111,8 @@
     <string name="no_location_permissions">Location permission denied, will not send CoTs</string>
     <string name="atak_preferences">ATAK Server Preferences</string>
     <string name="send_cots">Send Location CoTs to an ATAK server</string>
+    <string name="atak_callsign">Callsign</string>
+    <string name="atak_callsign_summary">The callsign announced to the TAK server</string>
     <string name="atak_address">ATAK Server Address</string>
     <string name="atak_username">ATAK Server Username</string>
     <string name="atak_password">ATAK Server Password</string>

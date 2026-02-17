@@ -180,6 +180,7 @@ public class Camera2Service extends Service implements ConnectChecker,
     private boolean send_cot = false;
     private boolean send_stream_details = false;
     private String atak_address;
+    private String callsign;
     private long last_fix_time = 0;
 
     private OpenGlView openGlView;
@@ -869,6 +870,7 @@ public class Camera2Service extends Service implements ConnectChecker,
         atak_address = preferences.getString(Preferences.ATAK_SERVER_ADDRESS, Preferences.ATAK_SERVER_ADDRESS_DEFAULT);
         send_cot = preferences.getBoolean(Preferences.ATAK_SEND_COT, Preferences.ATAK_SEND_COT_DEFAULT);
         send_stream_details = preferences.getBoolean(Preferences.ATAK_SEND_STREAM_DETAILS, Preferences.ATAK_SEND_STREAM_DETAILS_DEFAULT);
+        callsign = preferences.getString(Preferences.ATAK_CALLSIGN, Preferences.ATAK_CALLSIGN_DEFAULT);
 
         String oldVideoSource = videoSource;
         videoSource = preferences.getString(Preferences.VIDEO_SOURCE, Preferences.VIDEO_SOURCE_DEFAULT);
@@ -1062,7 +1064,7 @@ public class Camera2Service extends Service implements ConnectChecker,
                         __Video __video = new __Video(url, uid, connectionEntry);
                         Device device = new Device(rotationInDegrees, 0);
                         Sensor sensor = new Sensor(horizonalFov, rotationInDegrees);
-                        Contact contact = new Contact(path);
+                        Contact contact = new Contact(callsign);
 
                         IntentFilter ifilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
                         Intent batteryStatus = getApplicationContext().registerReceiver(null, ifilter);
@@ -1233,7 +1235,7 @@ public class Camera2Service extends Service implements ConnectChecker,
                 Point point = new Point(location.getLatitude(), location.getLongitude(), 0.0);
                 event.setPoint(point);
 
-                Contact contact = new Contact(path);
+                Contact contact = new Contact(callsign);
 
                 String url = protocol.concat("://").concat(address).concat(":").concat(String.valueOf(port));
 
