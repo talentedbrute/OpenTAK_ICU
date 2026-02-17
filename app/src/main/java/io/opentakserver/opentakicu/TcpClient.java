@@ -177,7 +177,6 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
 
                 Log.d(TAG, "Connecting to " + serverAddress + ":" + port);
                 socket = factory.createSocket(serverAddress, port);
-
             } else {
                 Log.d(TAG, "Connecting via TCP");
                 socket = new Socket(serverAddress, port);

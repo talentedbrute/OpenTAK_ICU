@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep:*)",
+      "Bash(./gradlew compileDebugJavaWithJavac:*)",
+      "WebSearch",
+      "Bash(./gradlew assembleDebug:*)",
+      "Bash(./gradlew dependencies:*)",
+      "Bash(./gradlew app:dependencies:*)",
+      "Bash(adb devices:*)",
+      "Bash(adb -s adb-R5CTC1X9CZM-KFrcvJ._adb-tls-connect._tcp install -r app/build/outputs/apk/debug/OpenTAK-ICU-1.4.5.1-debug.apk)",
+      "Bash(adb:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(./gradlew assembleRelease:*)",
+      "Bash(git tag:*)",
+      "Bash(gh release create:*)",
+      "Bash(brew install:*)",
+      "Bash(gh auth status:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)"
+    ]
+  }
+}

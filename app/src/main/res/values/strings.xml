@@ -109,22 +109,22 @@
     <string name="connection_failed">Connection Failed</string>
     <string name="error_preparing_stream">Error preparing screen, choose different audio/video codecs and try again</string>
     <string name="no_location_permissions">Location permission denied, will not send CoTs</string>
-    <string name="atak_preferences">ATAK Server Preferences</string>
-    <string name="send_cots">Send Location CoTs to an ATAK server</string>
+    <string name="atak_preferences">TAK Server Preferences</string>
+    <string name="send_cots">Send Location CoTs to a TAK server</string>
     <string name="atak_callsign">Callsign</string>
     <string name="atak_callsign_summary">The callsign announced to the TAK server</string>
     <string name="atak_sensor_range">Sensor Range (meters)</string>
     <string name="atak_sensor_range_summary">Distance the sensor FOV cone extends on the map</string>
-    <string name="atak_address">ATAK Server Address</string>
-    <string name="atak_username">ATAK Server Username</string>
-    <string name="atak_password">ATAK Server Password</string>
+    <string name="atak_address">TAK Server Address</string>
+    <string name="atak_username">TAK Server Username</string>
+    <string name="atak_password">TAK Server Password</string>
     <string name="trust_store_cert">Trust Store Certificate</string>
     <string name="trust_store_cert_password">Trust Store Certificate Password</string>
     <string name="client_cert">Client Certificate</string>
     <string name="client_cert_password">Client Certificate Password</string>
-    <string name="atak_port">ATAK Server Port</string>
-    <string name="atak_auth">Enable ATAK Server Authentication</string>
-    <string name="atak_ssl">Connect to the ATAK Server via SSL</string>
+    <string name="atak_port">TAK Server Port</string>
+    <string name="atak_auth">Enable TAK Server Authentication</string>
+    <string name="atak_ssl">Connect to the TAK Server via SSL</string>
     <string name="atak_ssl_summary">Disable for TCP</string>
     <string name="atak_cert_enrollment">Connect to the ATAK Server using Certificate Enrollment</string>
     <string name="atak_cert_enrollment_summary">Use the provided username/password to request a certificate from the server.  Disable to specify the server and clients certificates.</string>
@@ -216,4 +216,16 @@
     <string name="text_overlay_timezone_summary">Enable for UTC, disable for local time zone</string>
     <string name="chroma_filter_background">Chroma Backgroud</string>
     <string name="chroma_filter_background_summary">Background image for use with the chroma key filter. Requires a bright green background.</string>
+
+    <!--stream settings import-->
+    <string name="import_dialog_title">Import Stream Settings</string>
+    <string name="import_dialog_message">Do you want to change the following settings:\n\n</string>
+    <string name="btn_import">Import</string>
+    <string name="label_address">Address: %1$s\n</string>
+    <string name="label_protocol">Protocol: %1$s\n</string>
+    <string name="label_port">Port: %1$s\n</string>
+    <string name="label_path">Path: %1$s\n</string>
+    <string name="label_user">User: %1$s\n</string>
+    <string name="label_pass">Password: %1$s\n</string>
+    <string name="settings_updated_success">Settings Updated Successfully</string>
 </resources>
