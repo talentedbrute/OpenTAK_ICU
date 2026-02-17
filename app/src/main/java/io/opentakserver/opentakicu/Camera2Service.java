@@ -510,6 +510,26 @@ public class Camera2Service extends Service implements ConnectChecker,
         return redLightEnabled;
     }
 
+    private void calculateFov() {
+        if (videoSource.equals(Preferences.VIDEO_SOURCE_DEFAULT)) {
+            Camera2Source camera2Source = (Camera2Source) getStream().getVideoSource();
+            CameraManager cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+            try {
+                CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics(camera2Source.getCurrentCameraId());
+                float[] maxFocus = cameraCharacteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
+                SizeF size = cameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
+                float w = size.getWidth();
+                float h = size.getHeight();
+                horizonalFov = (2*Math.atan(w/(maxFocus[0]*2))) * 180/Math.PI;
+                verticalFov = (2*Math.atan(h/(maxFocus[0]*2))) * 180/Math.PI;
+                Log.d(TAG, "horizontalFov = " + horizonalFov);
+                Log.d(TAG, "verticalFov = " + verticalFov);
+            } catch (CameraAccessException e) {
+                Log.e(TAG, "Failed to get camera characteristics", e);
+            }
+        }
+    }
+
     public void switchCamera() {
         if (videoSource.equals(Preferences.VIDEO_SOURCE_DEFAULT)) {
             Log.d(TAG, "Camera Changed");
@@ -536,20 +556,7 @@ public class Camera2Service extends Service implements ConnectChecker,
                 toggleRedLights();
             }
 
-            CameraManager cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
-            try {
-                CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics(camera2Source.getCurrentCameraId());
-                float[] maxFocus = cameraCharacteristics.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
-                SizeF size = cameraCharacteristics.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
-                float w = size.getWidth();
-                float h = size.getHeight();
-                horizonalFov = (2*Math.atan(w/(maxFocus[0]*2))) * 180/Math.PI;
-                verticalFov = (2*Math.atan(h/(maxFocus[0]*2))) * 180/Math.PI;
-                Log.d(TAG, "horizontalFov = " + horizonalFov);
-                Log.d(TAG, "verticalFov = " + verticalFov);
-            } catch (CameraAccessException e) {
-                Log.e(TAG, "Failed to get camera characteristics", e);
-            }
+            calculateFov();
         }
     }
 
@@ -780,6 +787,7 @@ public class Camera2Service extends Service implements ConnectChecker,
         } else {
             prepareVideo = getStream().prepareVideo(width, height, bitrate, fps, 2, CameraHelper.getCameraOrientation(getApplicationContext()));
             getStream().changeVideoSource(new Camera2Source(getApplicationContext()));
+            calculateFov();
         }
 
         Log.d(TAG, "Sample rate: " + samplerate + " stereo " + stereo);
