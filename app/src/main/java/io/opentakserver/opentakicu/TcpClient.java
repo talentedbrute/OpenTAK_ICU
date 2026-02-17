@@ -350,7 +350,6 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
             float batteryPct = level * 100 / (float) scale;
 
             Detail detail = new Detail(contact, null, null, null, takv, new uid(callsign), null, new Status(batteryPct));
-            detail.set__group(new __group("Cyan", "Team Member"));
             detail.setPrecisionlocation(new precisionlocation("UNKNOWN", "UNKNOWN"));
             announcement.setDetail(detail);
 
