@@ -20,7 +20,7 @@ plugins {
 
 android {
     namespace = "io.opentakserver.opentakicu"
-    compileSdk = 35
+    compileSdk = 36
 
     lint {
         abortOnError = false
@@ -30,7 +30,7 @@ android {
         applicationId = "io.opentakserver.opentakicu"
         minSdk = 32
         targetSdk = 34
-        versionCode = 1
+        versionCode = 2
         versionName = "1.5.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
