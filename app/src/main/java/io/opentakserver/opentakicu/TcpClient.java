@@ -119,92 +119,84 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
         getSettings();
     }
 
-    private void connect() throws TAKServerConnectionException {
-        try {
-            Log.d(TAG, "Connecting...");
-            getSettings();
+    private void connect() throws Exception {
+        Log.d(TAG, "Connecting...");
+        getSettings();
 
-            if (atak_ssl) {
-                SSLSocketFactory factory = null;
-                if (atak_cert_enrollment) {
-                    Log.d(TAG, "Connecting via SSL with certificate enrollment");
-                    String certsDir = context.getFilesDir() + "/certs/" + serverAddress;
-                    String clientPemPath = certsDir + "/client.pem";
-                    String serverPemPath = certsDir + "/server.pem";
+        if (atak_ssl) {
+            SSLSocketFactory factory = null;
+            if (atak_cert_enrollment) {
+                Log.d(TAG, "Connecting via SSL with certificate enrollment");
+                String certsDir = context.getFilesDir() + "/certs/" + serverAddress;
+                String clientPemPath = certsDir + "/client.pem";
+                String serverPemPath = certsDir + "/server.pem";
 
-                    File clientPem = new File(clientPemPath);
-                    File serverPem = new File(serverPemPath);
+                File clientPem = new File(clientPemPath);
+                File serverPem = new File(serverPemPath);
 
-                    if (!clientPem.exists() || !serverPem.exists()) {
-                        if (atak_username == null || atak_username.isEmpty() || atak_password == null || atak_password.isEmpty()) {
-                            throw new TAKServerConnectionException("Certificate enrollment requires a username and password. Enable authentication and set credentials in ATAK settings.");
-                        }
-                        Log.i(TAG, "Certificates not found, starting enrollment");
-                        CertificateEnrollment enrollment = new CertificateEnrollment(context, serverAddress, atak_username, atak_password);
-                        if (!enrollment.enroll(clientPemPath, serverPemPath)) {
-                            throw new TAKServerConnectionException("Certificate enrollment failed for server: " + serverAddress);
-                        }
+                if (!clientPem.exists() || !serverPem.exists()) {
+                    if (atak_username == null || atak_username.isEmpty() || atak_password == null || atak_password.isEmpty()) {
+                        throw new TAKServerConnectionException("Certificate enrollment requires a username and password. Enable authentication and set credentials in ATAK settings.");
                     }
-
-                    factory = PEMImporter.createSSLFactory(new File(clientPemPath), new File(serverPemPath), "atakatak");
-                } else {
-                    Log.d(TAG, "Connecting via SSL with manual certificates");
-                    KeyStore trusted = KeyStore.getInstance("PKCS12");
-                    FileInputStream trust_store = new FileInputStream(atak_trust_store);
-
-                    KeyStore client_cert_keystore = KeyStore.getInstance("PKCS12");
-                    FileInputStream client_cert = new FileInputStream(atak_client_cert);
-
-                    trusted.load(trust_store, atak_trust_store_password.toCharArray());
-                    trust_store.close();
-
-                    client_cert_keystore.load(client_cert, atak_client_cert_password.toCharArray());
-                    client_cert.close();
-
-                    TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-                    trustManagerFactory.init(trusted);
-
-                    KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-                    kmf.init(client_cert_keystore, atak_client_cert_password.toCharArray());
-                    SSLContext sslContext = SSLContext.getInstance("TLSv1.3");
-                    sslContext.init(kmf.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
-
-                    factory = sslContext.getSocketFactory();
+                    Log.i(TAG, "Certificates not found, starting enrollment");
+                    CertificateEnrollment enrollment = new CertificateEnrollment(context, serverAddress, atak_username, atak_password);
+                    if (!enrollment.enroll(clientPemPath, serverPemPath)) {
+                        throw new TAKServerConnectionException("Certificate enrollment failed for server: " + serverAddress);
+                    }
                 }
 
-                if (factory == null) {
-                    Log.e(TAG, "SSL Socket Factory is NULL");
-                    throw new TAKServerConnectionException("Unable to connect to server: " + serverAddress + ":" + port);
-                }
-
-                Log.d(TAG, "Connecting to " + serverAddress + ":" + port);
-                socket = factory.createSocket(serverAddress, port);
+                factory = PEMImporter.createSSLFactory(new File(clientPemPath), new File(serverPemPath), "atakatak");
             } else {
-                Log.d(TAG, "Connecting via TCP");
-                socket = new Socket(serverAddress, port);
-                socket.setSoTimeout(1000);
-                Log.d(TAG, "Connected via TCP");
+                Log.d(TAG, "Connecting via SSL with manual certificates");
+                KeyStore trusted = KeyStore.getInstance("PKCS12");
+                FileInputStream trust_store = new FileInputStream(atak_trust_store);
+
+                KeyStore client_cert_keystore = KeyStore.getInstance("PKCS12");
+                FileInputStream client_cert = new FileInputStream(atak_client_cert);
+
+                trusted.load(trust_store, atak_trust_store_password.toCharArray());
+                trust_store.close();
+
+                client_cert_keystore.load(client_cert, atak_client_cert_password.toCharArray());
+                client_cert.close();
+
+                TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+                trustManagerFactory.init(trusted);
+
+                KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+                kmf.init(client_cert_keystore, atak_client_cert_password.toCharArray());
+                SSLContext sslContext = SSLContext.getInstance("TLSv1.3");
+                sslContext.init(kmf.getKeyManagers(), trustManagerFactory.getTrustManagers(), null);
+
+                factory = sslContext.getSocketFactory();
             }
 
-            mBufferOut = socket.getOutputStream();
-            mBufferIn = socket.getInputStream();
-            context.sendBroadcast(new Intent(TAK_SERVER_CONNECTED).setPackage(context.getPackageName()));
+            if (factory == null) {
+                Log.e(TAG, "SSL Socket Factory is NULL");
+                throw new TAKServerConnectionException("Unable to connect to server: " + serverAddress + ":" + port);
+            }
 
-            // Send out the version information about what we support as a client
-            event versionEvent = new event();
-            versionEvent.setUid("protouid");
-            versionEvent.setType(Constants.CT_TAKP_V);
-            versionEvent.setPoint(new Point(0.0, 0.0, 0.0));
-            Detail detail = new Detail(new TakControl(new TakProtocolSupport()));
-            versionEvent.setDetail(detail);
-            sendMessage(xmlMapper.writeValueAsString(versionEvent));
-        } catch (Exception e) {
-            Log.e(TAG, "Error connecting to TAK server", e);
-            context.sendBroadcast(new Intent(TAK_SERVER_CONNECTION_FAILED)
-                    .setPackage(context.getPackageName())
-                    .putExtra(EXTRA_ERROR_MESSAGE, e.getMessage()));
-            stopClient();
+            Log.d(TAG, "Connecting to " + serverAddress + ":" + port);
+            socket = factory.createSocket(serverAddress, port);
+        } else {
+            Log.d(TAG, "Connecting via TCP");
+            socket = new Socket(serverAddress, port);
+            socket.setSoTimeout(1000);
+            Log.d(TAG, "Connected via TCP");
         }
+
+        mBufferOut = socket.getOutputStream();
+        mBufferIn = socket.getInputStream();
+        context.sendBroadcast(new Intent(TAK_SERVER_CONNECTED).setPackage(context.getPackageName()));
+
+        // Send out the version information about what we support as a client
+        event versionEvent = new event();
+        versionEvent.setUid("protouid");
+        versionEvent.setType(Constants.CT_TAKP_V);
+        versionEvent.setPoint(new Point(0.0, 0.0, 0.0));
+        Detail detail = new Detail(new TakControl(new TakProtocolSupport()));
+        versionEvent.setDetail(detail);
+        sendMessage(xmlMapper.writeValueAsString(versionEvent));
     }
     /**
      * Sends the message entered by client to the server
@@ -225,8 +217,7 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
                     StringWriter sw = new StringWriter();
                     ex.printStackTrace(new PrintWriter(sw));
                     Log.e(TAG, "SocketException " + ex.getMessage() + ": " + sw);
-                    stopClient();
-                    stopPing();
+                    closeSocket();  // triggers read loop IOException → reconnect cycle
                 } catch (IOException ex) {
                     StringWriter sw = new StringWriter();
                     ex.printStackTrace(new PrintWriter(sw));
@@ -246,90 +237,96 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
      * Close the connection and release the members
      */
     public void stopClient() {
+        if (!mRun && socket == null) return;  // already fully stopped, avoid double broadcast
         mRun = false;
-
-        if(mBufferIn != null) {
-            try {
-                mBufferIn.close();
-            } catch(Exception ex) {
-
-            }
-        }
-        if (mBufferOut != null) {
-            try {
-                mBufferOut.flush();
-            } catch(IOException ex) {
-                //DO nothing
-            }
-
-            try {
-                mBufferOut.close();
-                if (socket != null)
-                    socket.close();
-            } catch (IOException e) {
-                Log.e(TAG, "Failed to close buffer", e);
-            }
-        }
-
-        stopPing();
-
+        closeSocket();
         prefs.unregisterOnSharedPreferenceChangeListener(this);
         mMessageListener = null;
-        mBufferIn = null;
-        mBufferOut = null;
-        socket = null;
         Log.d(TAG, "Sending Broadcast " + TAK_SERVER_DISCONNECTED);
         context.sendBroadcast(new Intent(TAK_SERVER_DISCONNECTED).setPackage(context.getPackageName()));
     }
 
+    /**
+     * Closes the current socket and streams without changing mRun or unregistering listeners.
+     * Used between reconnect attempts.
+     */
+    private void closeSocket() {
+        stopPing();
+        if (mBufferIn != null) {
+            try { mBufferIn.close(); } catch (Exception ignored) {}
+            mBufferIn = null;
+        }
+        if (mBufferOut != null) {
+            try { mBufferOut.flush(); } catch (IOException ignored) {}
+            try { mBufferOut.close(); } catch (IOException ignored) {}
+            mBufferOut = null;
+        }
+        if (socket != null) {
+            try { socket.close(); } catch (IOException ignored) {}
+            socket = null;
+        }
+    }
+
     @Override
     public void run() {
-        try {
-            connect();
+        mRun = true;
+        prefs.registerOnSharedPreferenceChangeListener(this);
 
-            if (mBufferIn == null) {
-                // connect() failed and already cleaned up
-                return;
+        while (mRun && !Thread.currentThread().isInterrupted()) {
+            closeSocket();
+
+            try {
+                connect();
+            } catch (Exception e) {
+                Log.e(TAG, "Error connecting to TAK server", e);
+                context.sendBroadcast(new Intent(TAK_SERVER_CONNECTION_FAILED)
+                        .setPackage(context.getPackageName())
+                        .putExtra(EXTRA_ERROR_MESSAGE, e.getMessage()));
+                try { Thread.sleep(5000); } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+                continue;
             }
 
             if (atak_auth) {
-                Cot cot = new Cot(atak_username, atak_password, uid);
-                auth atakAuth = new auth(cot);
-                sendMessage(xmlMapper.writeValueAsString(atakAuth));
+                try {
+                    Cot cot = new Cot(atak_username, atak_password, uid);
+                    auth atakAuth = new auth(cot);
+                    sendMessage(xmlMapper.writeValueAsString(atakAuth));
+                } catch (JsonProcessingException e) {
+                    Log.e(TAG, "Failed to send auth CoT", e);
+                }
             }
 
             try {
                 byte[] buffer = new byte[1024];
                 int read;
                 StringBuilder sb = new StringBuilder();
-                while (!Thread.currentThread().isInterrupted()) {
-                    while ((read = mBufferIn.read(buffer)) != -1) {
-                        sb.append(new String(buffer, 0, read));
-                        if (sb.toString().contains(Constants.END_EVENT)) {
-                            processCoT(sb.toString());
-                            sb.setLength(0);    // Reset builder
-                        }
+                while (mRun && !Thread.currentThread().isInterrupted()) {
+                    read = mBufferIn.read(buffer);
+                    if (read == -1) {
+                        Log.i(TAG, "Server closed connection");
+                        break;
+                    }
+                    sb.append(new String(buffer, 0, read));
+                    if (sb.toString().contains(Constants.END_EVENT)) {
+                        processCoT(sb.toString());
+                        sb.setLength(0);
                     }
                 }
-            } catch(IOException ex) {
-                StringWriter sw = new StringWriter();
-                ex.printStackTrace(new PrintWriter(sw));
-                Log.e(TAG, "IOException " + ex.getMessage() + ": " + sw);
+            } catch (IOException ex) {
+                Log.e(TAG, "Read error: " + ex.getMessage());
             }
 
-            // If the read loop exited unexpectedly while we're still meant to run, reconnect
             if (mRun) {
-                Log.i(TAG, "Connection dropped, reconnecting in 5 seconds...");
+                Log.i(TAG, "Connection lost, reconnecting in 5 seconds...");
                 try { Thread.sleep(5000); } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
                 }
-                if (mRun) connect();
             }
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error", e);
-            stopClient();
         }
+
+        stopClient();
     }
 
     private void processCoT(final String message) {
