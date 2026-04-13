@@ -58,6 +58,8 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
     public static final String TAG = Constants.TAG_PREFIX + TcpClient.class.getSimpleName();
     public static final String TAK_SERVER_CONNECTED = "tak_server_connected";
     public static final String TAK_SERVER_DISCONNECTED = "tak_server_disconnected";
+    public static final String TAK_SERVER_CONNECTION_FAILED = "tak_server_connection_failed";
+    public static final String EXTRA_ERROR_MESSAGE = "error_message";
 
     private SharedPreferences prefs;
 
@@ -126,7 +128,7 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
                 SSLSocketFactory factory = null;
                 if (atak_cert_enrollment) {
                     Log.d(TAG, "Connecting via SSL with certificate enrollment");
-                    String certsDir = context.getFilesDir() + "/certs";
+                    String certsDir = context.getFilesDir() + "/certs/" + serverAddress;
                     String clientPemPath = certsDir + "/client.pem";
                     String serverPemPath = certsDir + "/server.pem";
 
@@ -197,7 +199,10 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
             versionEvent.setDetail(detail);
             sendMessage(xmlMapper.writeValueAsString(versionEvent));
         } catch (Exception e) {
-            Log.e(TAG, "Error", e);
+            Log.e(TAG, "Error connecting to TAK server", e);
+            context.sendBroadcast(new Intent(TAK_SERVER_CONNECTION_FAILED)
+                    .setPackage(context.getPackageName())
+                    .putExtra(EXTRA_ERROR_MESSAGE, e.getMessage()));
             stopClient();
         }
     }
@@ -282,6 +287,11 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
         try {
             connect();
 
+            if (mBufferIn == null) {
+                // connect() failed and already cleaned up
+                return;
+            }
+
             if (atak_auth) {
                 Cot cot = new Cot(atak_username, atak_password, uid);
                 auth atakAuth = new auth(cot);
@@ -305,6 +315,15 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
                 StringWriter sw = new StringWriter();
                 ex.printStackTrace(new PrintWriter(sw));
                 Log.e(TAG, "IOException " + ex.getMessage() + ": " + sw);
+            }
+
+            // If the read loop exited unexpectedly while we're still meant to run, reconnect
+            if (mRun) {
+                Log.i(TAG, "Connection dropped, reconnecting in 5 seconds...");
+                try { Thread.sleep(5000); } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+                if (mRun) connect();
             }
 
         } catch (Exception e) {

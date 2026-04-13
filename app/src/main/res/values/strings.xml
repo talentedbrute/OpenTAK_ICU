@@ -128,6 +128,10 @@
     <string name="atak_ssl_summary">Disable for TCP</string>
     <string name="atak_cert_enrollment">Connect to the ATAK Server using Certificate Enrollment</string>
     <string name="atak_cert_enrollment_summary">Use the provided username/password to request a certificate from the server.  Disable to specify the server and clients certificates.</string>
+    <string name="clear_enrolled_certs">Clear Enrolled Certificates</string>
+    <string name="clear_enrolled_certs_summary">Force re-enrollment on next connection. Use if the TAK server has changed or SSL errors occur.</string>
+    <string name="enrolled_certs_cleared">Enrolled certificates cleared. Re-enrollment will occur automatically on the next connection.</string>
+    <string name="tak_connection_failed">TAK server connection failed: %1$s</string>
     <string name="video_preferences">Video Preferences</string>
     <string name="stream_preferences">Streaming Settings</string>
     <string name="audio_preferences">Audio Settings</string>

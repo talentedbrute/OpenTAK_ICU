@@ -76,6 +76,11 @@
             app:summary="@string/atak_cert_enrollment_summary"
             android:dependency="atak_ssl" />
         <Preference
+            android:key="clear_enrolled_certs"
+            android:title="@string/clear_enrolled_certs"
+            app:summary="@string/clear_enrolled_certs_summary"
+            android:dependency="atak_ssl" />
+        <Preference
             android:dependency="atak_cert_enrollment"
             android:key="trust_store_certificate"
             android:selectAllOnFocus="true"
