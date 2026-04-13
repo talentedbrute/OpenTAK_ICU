@@ -115,6 +115,7 @@ public class ATAKPreferencesFragment extends PreferenceFragmentCompat implements
 
         findPreference("client_certificate").setOnPreferenceClickListener(this);
         findPreference("test_client_cert").setOnPreferenceClickListener(this);
+        findPreference("clear_enrolled_certs").setOnPreferenceClickListener(this);
     }
 
     public static void copy(InputStream in, File dst) throws IOException {
@@ -148,8 +149,30 @@ public class ATAKPreferencesFragment extends PreferenceFragmentCompat implements
         } else if (preference.getKey().equals("test_client_cert")) {
             testClientCert();
             return true;
+        } else if (preference.getKey().equals("clear_enrolled_certs")) {
+            clearEnrolledCerts();
+            return true;
         }
         return false;
+    }
+
+    private void clearEnrolledCerts() {
+        deleteRecursive(new File(getContext().getFilesDir(), "certs"));
+        AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
+        builder.setTitle(getString(R.string.success));
+        builder.setMessage(getString(R.string.enrolled_certs_cleared));
+        builder.setPositiveButton(R.string.ok, (dialog, which) -> dialog.dismiss());
+        builder.create().show();
+    }
+
+    private void deleteRecursive(File fileOrDir) {
+        if (fileOrDir.isDirectory()) {
+            File[] children = fileOrDir.listFiles();
+            if (children != null) {
+                for (File child : children) deleteRecursive(child);
+            }
+        }
+        fileOrDir.delete();
     }
 
     private void testTrustStoreCert() {

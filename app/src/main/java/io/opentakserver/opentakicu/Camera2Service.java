@@ -237,6 +237,13 @@ public class Camera2Service extends Service implements ConnectChecker,
                         stopStream(null, null);
                         stopSelf();
                         break;
+                    case TcpClient.TAK_SERVER_CONNECTION_FAILED:
+                        String errorMsg = intent.getStringExtra(TcpClient.EXTRA_ERROR_MESSAGE);
+                        String notificationErrorMsg = errorMsg == null || errorMsg.trim().isEmpty()
+                                ? "Unknown error"
+                                : errorMsg;
+                        showNotification(getString(R.string.tak_connection_failed, notificationErrorMsg), false);
+                        break;
                 }
             }
         }
@@ -282,6 +289,7 @@ public class Camera2Service extends Service implements ConnectChecker,
         intentFilter.addAction(START_STREAM);
         intentFilter.addAction(STOP_STREAM);
         intentFilter.addAction(EXIT_APP);
+        intentFilter.addAction(TcpClient.TAK_SERVER_CONNECTION_FAILED);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(receiver, intentFilter, Context.RECEIVER_EXPORTED);
