@@ -46,7 +46,10 @@ import java.io.StringWriter;
 import java.net.Socket;
 import java.net.SocketException;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -127,12 +130,11 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
             SSLSocketFactory factory = null;
             if (atak_cert_enrollment) {
                 Log.d(TAG, "Connecting via SSL with certificate enrollment");
-                String certsDir = context.getFilesDir() + "/certs/" + serverAddress;
-                String clientPemPath = certsDir + "/client.pem";
-                String serverPemPath = certsDir + "/server.pem";
-
-                File clientPem = new File(clientPemPath);
-                File serverPem = new File(serverPemPath);
+                File certsDir = new File(new File(context.getFilesDir(), "certs"), serverCertDirName(serverAddress, port));
+                File clientPem = new File(certsDir, "client.pem");
+                File serverPem = new File(certsDir, "server.pem");
+                String clientPemPath = clientPem.getAbsolutePath();
+                String serverPemPath = serverPem.getAbsolutePath();
 
                 if (!clientPem.exists() || !serverPem.exists()) {
                     if (atak_username == null || atak_username.isEmpty() || atak_password == null || atak_password.isEmpty()) {
@@ -449,6 +451,28 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
     @Override
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, @Nullable String key) {
         getSettings();
+    }
+
+    /**
+     * Returns a filesystem-safe directory name for the given server address and port.
+     * Uses the first 16 hex chars of SHA-256(address:port) so the result is fixed-length,
+     * contains only [0-9a-f], and cannot escape the parent directory regardless of what
+     * the user typed into the address preference field.
+     */
+    private String serverCertDirName(String address, int port) {
+        try {
+            String key = address + ":" + port;
+            byte[] hash = MessageDigest.getInstance("SHA-256")
+                    .digest(key.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(32);
+            for (int i = 0; i < 16; i++) {
+                hex.append(String.format("%02x", hash[i]));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            // SHA-256 is guaranteed present on Android; fall back to a safe literal
+            throw new RuntimeException("SHA-256 unavailable", e);
+        }
     }
 
     //Declare the interface. The method messageReceived(String message) will must be implemented in the Activity
