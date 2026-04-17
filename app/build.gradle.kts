@@ -30,8 +30,8 @@ android {
         applicationId = "io.opentakserver.opentakicu"
         minSdk = 32
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.5.4.0"
+        versionCode = 3
+        versionName = "1.5.4.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

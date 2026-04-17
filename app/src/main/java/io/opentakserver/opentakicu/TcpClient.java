@@ -36,10 +36,12 @@ import io.opentakserver.opentakicu.utils.CertificateEnrollment;
 import io.opentakserver.opentakicu.utils.Constants;
 import io.opentakserver.opentakicu.utils.PEMImporter;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -50,6 +52,13 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import java.util.Date;
+
+import org.bouncycastle.openssl.PEMParser;
+import org.bouncycastle.util.io.pem.PemObject;
+import org.bouncycastle.util.io.pem.PemReader;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -137,17 +146,24 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
                 String serverPemPath = serverPem.getAbsolutePath();
 
                 if (!clientPem.exists() || !serverPem.exists()) {
-                    if (atak_username == null || atak_username.isEmpty() || atak_password == null || atak_password.isEmpty()) {
-                        throw new TAKServerConnectionException("Certificate enrollment requires a username and password. Enable authentication and set credentials in ATAK settings.");
-                    }
                     Log.i(TAG, "Certificates not found, starting enrollment");
-                    CertificateEnrollment enrollment = new CertificateEnrollment(context, serverAddress, atak_username, atak_password);
-                    if (!enrollment.enroll(clientPemPath, serverPemPath)) {
-                        throw new TAKServerConnectionException("Certificate enrollment failed for server: " + serverAddress);
-                    }
+                    enrollCertificates(clientPemPath, serverPemPath);
+                } else if (!isCertValid(clientPem)) {
+                    Log.i(TAG, "Client certificate is expired or invalid, re-enrolling");
+                    clientPem.delete();
+                    serverPem.delete();
+                    enrollCertificates(clientPemPath, serverPemPath);
                 }
 
-                factory = PEMImporter.createSSLFactory(new File(clientPemPath), new File(serverPemPath), "atakatak");
+                try {
+                    factory = PEMImporter.createSSLFactory(clientPem, serverPem, "atakatak");
+                } catch (Exception e) {
+                    Log.w(TAG, "Failed to load certificates, re-enrolling: " + e.getMessage());
+                    clientPem.delete();
+                    serverPem.delete();
+                    enrollCertificates(clientPemPath, serverPemPath);
+                    factory = PEMImporter.createSSLFactory(clientPem, serverPem, "atakatak");
+                }
             } else {
                 Log.d(TAG, "Connecting via SSL with manual certificates");
                 KeyStore trusted = KeyStore.getInstance("PKCS12");
@@ -473,6 +489,42 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
             // SHA-256 is guaranteed present on Android; fall back to a safe literal
             throw new RuntimeException("SHA-256 unavailable", e);
         }
+    }
+
+    private void enrollCertificates(String clientPemPath, String serverPemPath) throws TAKServerConnectionException {
+        if (atak_username == null || atak_username.isEmpty() || atak_password == null || atak_password.isEmpty()) {
+            throw new TAKServerConnectionException("Certificate enrollment requires a username and password. Enable authentication and set credentials in ATAK settings.");
+        }
+        CertificateEnrollment enrollment = new CertificateEnrollment(context, serverAddress, atak_username, atak_password);
+        if (!enrollment.enroll(clientPemPath, serverPemPath)) {
+            throw new TAKServerConnectionException("Certificate enrollment failed for server: " + serverAddress);
+        }
+    }
+
+    /**
+     * Returns true if the first certificate in the PEM file is present and not expired
+     * (with a 24-hour renewal buffer). Returns false if the file cannot be read, contains
+     * no certificate, or the certificate has expired or will expire within 24 hours.
+     */
+    private boolean isCertValid(File pemFile) {
+        try (FileInputStream fis = new FileInputStream(pemFile);
+             PEMParser parser = new PEMParser(new PemReader(new InputStreamReader(fis)))) {
+            Object obj;
+            while ((obj = parser.readPemObject()) != null) {
+                PemObject pem = (PemObject) obj;
+                if ("CERTIFICATE".equals(pem.getType())) {
+                    CertificateFactory cf = CertificateFactory.getInstance("X.509");
+                    X509Certificate cert = (X509Certificate) cf.generateCertificate(
+                            new ByteArrayInputStream(pem.getContent()));
+                    Date renewAfter = new Date(System.currentTimeMillis() + 24L * 60 * 60 * 1000);
+                    cert.checkValidity(renewAfter);
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Certificate validation failed: " + e.getMessage());
+        }
+        return false;
     }
 
     //Declare the interface. The method messageReceived(String message) will must be implemented in the Activity
