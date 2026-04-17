@@ -16,11 +16,13 @@ public class SettingsFragment extends PreferenceFragmentCompat {
 
         Preference versionPref = findPreference("app_version");
         if (versionPref != null) {
-            versionPref.setTitle("OpenTAK ICU");
+            CharSequence appLabel = requireContext().getApplicationInfo()
+                    .loadLabel(requireContext().getPackageManager());
+            versionPref.setTitle(appLabel);
             try {
                 PackageInfo info = requireContext().getPackageManager()
                         .getPackageInfo(requireContext().getPackageName(), 0);
-                versionPref.setSummary("v" + info.versionName);
+                versionPref.setSummary(info.versionName);
             } catch (Exception e) {
                 versionPref.setSummary("");
             }
