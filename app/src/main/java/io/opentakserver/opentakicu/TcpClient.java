@@ -148,8 +148,8 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
                 if (!clientPem.exists() || !serverPem.exists()) {
                     Log.i(TAG, "Certificates not found, starting enrollment");
                     enrollCertificates(clientPemPath, serverPemPath);
-                } else if (!isCertValid(clientPem)) {
-                    Log.i(TAG, "Client certificate is expired or invalid, re-enrolling");
+                } else if (!isCertValid(clientPem) || !isCertValid(serverPem)) {
+                    Log.i(TAG, "Certificate expired or invalid, re-enrolling");
                     clientPem.delete();
                     serverPem.delete();
                     enrollCertificates(clientPemPath, serverPemPath);
@@ -502,13 +502,16 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
     }
 
     /**
-     * Returns true if the first certificate in the PEM file is present and not expired
+     * Returns true if all certificates in the PEM file are present and not expired
      * (with a 24-hour renewal buffer). Returns false if the file cannot be read, contains
-     * no certificate, or the certificate has expired or will expire within 24 hours.
+     * no certificates, or any certificate has expired or will expire within 24 hours.
+     * Checks all certs in the file so that CA chains in server.pem are fully validated.
      */
     private boolean isCertValid(File pemFile) {
+        int certCount = 0;
         try (FileInputStream fis = new FileInputStream(pemFile);
              PEMParser parser = new PEMParser(new PemReader(new InputStreamReader(fis)))) {
+            Date renewAfter = new Date(System.currentTimeMillis() + 24L * 60 * 60 * 1000);
             Object obj;
             while ((obj = parser.readPemObject()) != null) {
                 PemObject pem = (PemObject) obj;
@@ -516,15 +519,15 @@ public class TcpClient implements Runnable, SharedPreferences.OnSharedPreference
                     CertificateFactory cf = CertificateFactory.getInstance("X.509");
                     X509Certificate cert = (X509Certificate) cf.generateCertificate(
                             new ByteArrayInputStream(pem.getContent()));
-                    Date renewAfter = new Date(System.currentTimeMillis() + 24L * 60 * 60 * 1000);
                     cert.checkValidity(renewAfter);
-                    return true;
+                    certCount++;
                 }
             }
         } catch (Exception e) {
-            Log.w(TAG, "Certificate validation failed: " + e.getMessage());
+            Log.w(TAG, "Certificate validation failed for " + pemFile.getName() + ": " + e.getMessage());
+            return false;
         }
-        return false;
+        return certCount > 0;
     }
 
     //Declare the interface. The method messageReceived(String message) will must be implemented in the Activity
