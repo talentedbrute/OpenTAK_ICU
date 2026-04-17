@@ -4,6 +4,11 @@
     android:key="main_preferences_screen">
 
     <Preference
+        android:key="app_version"
+        android:selectable="false"
+    />
+
+    <Preference
         app:fragment="io.opentakserver.opentakicu.preferences.StreamPreferencesFragment"
         android:key="stream_settings"
         android:title="@string/stream_preferences"
