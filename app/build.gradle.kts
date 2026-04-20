@@ -1,9 +1,11 @@
 import java.util.Properties
 import java.io.FileInputStream
 
-// Create a variable called keystorePropertiesFile, and initialize it to your
-// keystore.properties file, in the rootProject folder.
-val keystorePropertiesFile = file("../../keystore.properties")
+// Keystore properties file: local builds use ../../keystore.properties;
+// CI sets KEYSTORE_PROPERTIES_PATH to a temp file written by the workflow.
+val keystorePropertiesFile = System.getenv("KEYSTORE_PROPERTIES_PATH")
+    ?.let { file(it) }
+    ?: file("../../keystore.properties")
 
 // Initialize a new Properties() object called keystoreProperties.
 val keystoreProperties = Properties()
@@ -46,7 +48,7 @@ android {
         create("release") {
             keyAlias = keystoreProperties["RELEASE_KEY_ALIAS"] as String
             keyPassword = keystoreProperties["RELEASE_KEY_PASSWORD"] as String
-            storeFile = file("../../android_keystore")
+            storeFile = (System.getenv("KEYSTORE_PATH") ?: "../../android_keystore").let { file(it) }
             storePassword = keystoreProperties["RELEASE_STORE_PASSWORD"] as String
         }
     }
